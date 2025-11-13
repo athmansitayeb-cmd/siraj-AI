@@ -1,0 +1,27 @@
+version: "3.8"
+services:
+  mongo:
+    image: mongo:6
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - siraj_net
+
+  siraj-api:
+    build: ./api
+    restart: unless-stopped
+    env_file:
+      - ./.env.example
+    ports:
+      - "3000:3000"
+    depends_on:
+      - mongo
+    networks:
+      - siraj_net
+
+volumes:
+  mongo_data:
+
+networks:
+  siraj_net:

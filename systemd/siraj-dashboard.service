@@ -1,0 +1,11 @@
+[Unit]
+Description=Siraj Dashboard Service
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/node /home/athman/siraj/dashboard/server.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

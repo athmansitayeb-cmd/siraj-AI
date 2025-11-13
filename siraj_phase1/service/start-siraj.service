@@ -1,0 +1,14 @@
+[Unit]
+Description=SIRAJ Phase1 (user)
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=%h/siraj_phase1/.env.example
+WorkingDirectory=%h/siraj_phase1/api
+ExecStart=/usr/bin/node index.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

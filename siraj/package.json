@@ -1,0 +1,22 @@
+{
+  "name": "siraj",
+  "version": "1.0.0",
+  "description": "سراجي - minimal auth + admin demo",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "dotenv": "^17.2.2",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.18.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  },
+  "author": "Si Tayeb"
+}

@@ -1,0 +1,24 @@
+SIRAJ Phase1 - تعليمات سريعة
+
+1) تشغيل باستخدام Docker Compose (مفضل للتكامل السريع)
+   docker-compose up --build -d
+
+2) البدء محلياً (بدون دوكر) - لبناء API محلياً:
+   cd api
+   npm ci
+   NODE_ENV=production PORT=3000 MONGO_URI="mongodb://localhost:27017/siraj" node index.js
+
+3) تشغيل systemd user unit:
+   cp service/start-siraj.service ~/.config/systemd/user/start-siraj.service
+   systemctl --user daemon-reload
+   systemctl --user enable --now start-siraj.service
+   systemctl --user status start-siraj.service
+
+4) فتح نفق ngrok (اختياري)
+   export NGROK_AUTHTOKEN=your_token_here
+   ngrok http 3000
+
+5) اختبارات سريعة:
+   curl http://localhost:3000/health
+   curl -X POST http://localhost:3000/km/knowledge -H "Content-Type: application/json" -d '{"title":"اختبار","content":"محتوى"}'
+   curl -X POST http://localhost:3000/km/infer -H "Content-Type: application/json" -d '{"input":"مرحباً"}'

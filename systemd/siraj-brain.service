@@ -1,0 +1,11 @@
+[Unit]
+Description=Siraj Brain Service
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/node /home/athman/siraj/siraj-brain/index.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

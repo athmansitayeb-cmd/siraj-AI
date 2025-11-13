@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🌌 لوحة سراج الأسطورية</title>
+<style>
+body { font-family: monospace; background: #0d0d0d; color: #00ff99; margin:0; padding:20px; }
+h1 { color: #ffdd00; }
+table { width:100%; border-collapse: collapse; margin-top:10px; }
+th, td { border:1px solid #00ff99; padding:5px; text-align:center; }
+th { background:#111; color:#ffdd00; }
+.online { color:#00ff99; font-weight:bold; }
+.offline { color:#ff3300; font-weight:bold; }
+button { background:#00ff99;color:#0d0d0d;border:none;padding:5px 10px;cursor:pointer;margin:2px; }
+button:hover { background:#33ffbb; }
+#log { background:#111; padding:10px; border:1px solid #00ff99; height:200px; overflow:auto; margin-top:10px; }
+</style>
+</head>
+<body>
+<h1>🌌 لوحة سراج الأسطورية</h1>
+<table id="services">
+<thead>
+<tr>
+<th>ID</th><th>اسم الخدمة</th><th>الحالة</th><th>CPU</th><th>MEM</th><th>إعادة التشغيل</th>
+</tr>
+</thead>
+<tbody>
+<tr><td colspan="6">جارٍ التحميل...</td></tr>
+</tbody>
+</table>
+
+<h2>📜 سجلات siraj-backend</h2>
+<button onclick="fetchLogs()">⬇️ تحديث السجلات</button>
+<pre id="log">جارٍ التحميل...</pre>
+
+<script>
+const PORT = 9090;
+
+async function fetchServices(){
+    try{
+        const res = await fetch(`http://localhost:${PORT}/status`);
+        const data = await res.json();
+        const tbody = document.querySelector("#services tbody");
+        tbody.innerHTML = "";
+        data.forEach(svc=>{
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+            <td>${svc.id}</td>
+            <td>${svc.name}</td>
+            <td class="${svc.status==='online'?'online':'offline'}">${svc.status}</td>
+            <td>${svc.cpu}%</td>
+            <td>${svc.mem} MB</td>
+            <td><button onclick="restart('${svc.name}')">🔄 إعادة التشغيل</button></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }catch(e){
+        document.querySelector("#services tbody").innerHTML = "<tr><td colspan='6'>❌ لا يمكن الاتصال بـ siraj-backend</td></tr>";
+    }
+}
+
+async function fetchLogs(){
+    try{
+        const res = await fetch(`http://localhost:${PORT}/logs`);
+        const text = await res.text();
+        document.getElementById('log').textContent = text;
+    }catch(e){
+        document.getElementById('log').textContent = '❌ لا يمكن الاتصال بـ siraj-backend على البورت '+PORT;
+    }
+}
+
+async function restart(name){
+    try{
+        await fetch(`http://localhost:${PORT}/restart/${name}`, { method:'POST' });
+        alert("🔄 أعيد تشغيل " + name);
+        fetchServices();
+    }catch(e){
+        alert("❌ فشل إعادة التشغيل: "+name);
+    }
+}
+
+fetchServices();
+fetchLogs();
+setInterval(fetchServices,5000);
+setInterval(fetchLogs,5000);
+</script>
+</body>
+</html>

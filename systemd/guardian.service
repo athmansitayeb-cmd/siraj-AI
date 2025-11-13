@@ -1,0 +1,11 @@
+[Unit]
+Description=Guardian Sentinel Service
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/node /home/athman/siraj/monitor/guardian.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
