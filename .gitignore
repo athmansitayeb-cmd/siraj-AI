@@ -46,3 +46,7 @@ app.*.map.json
 *.deb
 google-chrome-stable_current_amd64.deb
 .env
+.env
+*.config
+*.json
+*.yml
