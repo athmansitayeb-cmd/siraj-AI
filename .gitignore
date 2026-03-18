@@ -45,3 +45,4 @@ app.*.map.json
 /android/app/release
 *.deb
 google-chrome-stable_current_amd64.deb
+.env
