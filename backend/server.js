@@ -1,78 +1,83 @@
+// server.js
+import emailRoutes from "./routes/email.js";
 import express from "express";
-import helmet from "helmet";
-import compression from "compression";
+import mongoose from "mongoose";
+import dotenv from "dotenv";
 import cors from "cors";
+import http from "http";
+import { Server } from "socket.io";
+import Groq from "groq-sdk";
 import jwt from "jsonwebtoken";
-import bcrypt from "bcrypt";
-import { Sequelize, DataTypes } from "sequelize";
+import path from "path";
+import { fileURLToPath } from "url";
 
-import { processInput } from "./brain.js";
+// Routes & Middleware
+import authRoutes from "./routes/auth.js";
+import authMiddleware from "./middleware/auth.js";
+import chatRoutes from "./routes/chat.js";
+
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 9090;
-const JWT_SECRET = "siraj_super_secret";
-
-app.use(helmet());
-app.use(compression());
 app.use(cors());
 app.use(express.json());
+app.use("/api/email", emailRoutes);
 
-const sequelize = new Sequelize({
-  dialect: "sqlite",
-  storage: "./siraj.db",
-  logging: false,
+// Connect to MongoDB
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log("✅ MongoDB Connected Successfully"))
+  .catch(err => console.log(err));
+
+// Auth routes
+app.use("/api/auth", authRoutes);
+app.use("/api/chat", chatRoutes);
+// ---------------------------
+// Protected Chat via Socket.io
+// ---------------------------
+const server = http.createServer(app);
+const io = new Server(server, { path: "/chat", cors: { origin: "*" } });
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+// JWT verification for Socket.io
+io.use((socket, next) => {
+  socket.user = { id: "guest" };
+  next();
 });
 
-const User = sequelize.define("User", {
-  username: { type: DataTypes.STRING, unique: true },
-  password: DataTypes.STRING,
+// Chat events
+io.on("connection", socket => {
+  console.log("🟢 Connected:", socket.user.id);
+
+  socket.on("message", async msg => {
+    try {
+      const completion = await groq.chat.completions.create({
+        model: "llama-3.3-70b-versatile",
+        messages: [{ role: "user", content: msg }]
+      });
+      socket.emit("message", { response: completion.choices[0].message.content });
+    } catch {
+      socket.emit("message", { response: "خطأ في الذكاء الاصطناعي" });
+    }
+  });
 });
 
-await sequelize.sync();
-
-app.post("/api/register", async (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password) return res.status(400).json({ error: "Missing fields" });
-
-  const hash = await bcrypt.hash(password, 10);
-  try {
-    await User.create({ username, password: hash });
-    res.json({ message: "User created" });
-  } catch {
-    res.status(400).json({ error: "User exists" });
-  }
+// ---------------------------
+// Serve frontend
+// ---------------------------
+const frontendPath = path.join(__dirname, "../frontend-react/dist");
+app.use(express.static(frontendPath));
+// Serve frontend فقط إذا لم يكن API
+app.get("*", (req, res, next) => {
+  if (req.path.startsWith("/api")) return next();
+  res.sendFile(path.join(frontendPath, "index.html"));
 });
 
-app.post("/api/login", async (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password) return res.status(400).json({ error: "Missing fields" });
-
-  const user = await User.findOne({ where: { username } });
-  if (!user) return res.status(401).json({ error: "Invalid credentials" });
-
-  const valid = await bcrypt.compare(password, user.password);
-  if (!valid) return res.status(401).json({ error: "Invalid credentials" });
-
-  const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: "1h" });
-  res.json({ token });
-});
-
-app.post("/api/message", async (req, res) => {
-  const { message } = req.body;
-  if (!message) return res.status(400).json({ error: "يرجى إرسال نص الرسالة." });
-
-  try {
-    const result = await processInput(message);
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: "Brain processing failed", details: err.message });
-  }
-});
-
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", uptime: process.uptime() });
-});
-
-app.listen(PORT, () => {
-  console.log(`🚀 SIRAJ backend running on port ${PORT}`);
+// ---------------------------
+// Start server
+// ---------------------------
+server.listen(process.env.PORT, () => {
+  console.log(`🚀 Server running on ${process.env.PORT}`);
 });

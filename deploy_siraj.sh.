@@ -1,0 +1,46 @@
+#!/bin/bash
+# ==========================
+# SIRAJ Deployment Script
+# ==========================
+
+# إعداد المسارات
+FRONTEND_BUILD="/opt/siraj/frontend-react/build"
+NGINX_HTML="/opt/siraj/frontend/nginx/html"
+DOMAIN="siraj.software"
+EMAIL="admin@siraj.software"
+
+# 1. التحقق من وجود Build
+if [ ! -d "$FRONTEND_BUILD" ]; then
+  echo "❌ خطأ: مجلد build غير موجود في $FRONTEND_BUILD"
+  exit 1
+fi
+
+# 2. حذف النسخة القديمة
+echo "🗑️  حذف النسخة القديمة..."
+rm -rf "$NGINX_HTML"/*
+
+# 3. نسخ النسخة الجديدة
+echo "📦 نسخ النسخة الجديدة..."
+mkdir -p "$NGINX_HTML"
+cp -r "$FRONTEND_BUILD"/* "$NGINX_HTML/"
+
+# 4. ضبط الصلاحيات
+echo "🔐 ضبط الصلاحيات..."
+chown -R www-data:www-data "$NGINX_HTML"
+chmod -R 755 "$NGINX_HTML"
+
+# 5. إعادة تحميل Nginx
+echo "♻️  اختبار وإعادة تحميل Nginx..."
+nginx -t && systemctl reload nginx
+
+# 6. التحقق من وجود الشهادة وتجديدها إذا اقتربت من الانتهاء
+echo "🔑 التحقق من الشهادة..."
+if ! certbot certificates | grep -q "$DOMAIN"; then
+    echo "📄 إنشاء شهادة جديدة عبر Certbot..."
+    certbot --nginx -d "$DOMAIN" -d "www.$DOMAIN" --email "$EMAIL" --agree-tos --non-interactive
+else
+    echo "✅ الشهادة موجودة وجاهزة"
+fi
+
+# 7. تنظيف
+echo "✅ تم النشر بنجاح!"

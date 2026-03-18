@@ -1,0 +1,23 @@
+cycle,latency,heapUsedMB,note,timestamp
+0,1,null,null,1767511942541
+50,1,null,null,1767511942571
+100,1,null,null,1767511942572
+150,1,null,null,1767511942574
+200,1,null,null,1767511942578
+250,1,null,null,1767511942580
+300,1,null,null,1767511942581
+350,1,null,null,1767511942586
+400,1,null,null,1767511942588
+450,1,null,null,1767511942589
+500,1,null,null,1767511942593
+0,0.05,5.33,MasterCore object used directly,null
+50,0.04,5.37,MasterCore object used directly,null
+100,0.03,5.38,MasterCore object used directly,null
+150,0.07,5.38,MasterCore object used directly,null
+200,0.14,5.39,MasterCore object used directly,null
+250,0.08,5.39,MasterCore object used directly,null
+300,0.07,5.40,MasterCore object used directly,null
+350,0.04,5.41,MasterCore object used directly,null
+400,0.05,5.41,MasterCore object used directly,null
+450,0.03,5.42,MasterCore object used directly,null
+500,0.13,5.42,MasterCore object used directly,null

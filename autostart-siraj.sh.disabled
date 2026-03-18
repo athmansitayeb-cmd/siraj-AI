@@ -1,0 +1,52 @@
+#!/bin/bash
+# 🟢 سيراج الأسطوري - Autostart كامل وجاهز
+
+PROJECT_DIR="$HOME/siraj"
+BACKEND_PORT=9090
+NGROK_PORT=9091
+
+# --- 1. الانتقال لمجلد المشروع ---
+cd "$PROJECT_DIR" || exit
+
+# --- 2. إعادة إحياء PM2 وتشغيل جميع الخدمات ---
+if command -v pm2 >/dev/null 2>&1; then
+    echo -e "\033[1;36m🌌 بدء مشروع سيراج: إحياء PM2 وتشغيل التطبيقات... 🌌\033[0m"
+    pm2 resurrect --silent >/dev/null 2>&1
+    pm2 start siraj-all >/dev/null 2>&1
+fi
+
+# --- 3. التأكد من Backend يعمل على المنفذ 9090 ---
+if ! nc -z 127.0.0.1 $BACKEND_PORT >/dev/null 2>&1; then
+    echo -e "\033[1;33m⚡ Backend غير شغال، إعادة تشغيل... ⚡\033[0m"
+    pm2 restart siraj-backend >/dev/null 2>&1
+    sleep 2
+fi
+
+# --- 4. تشغيل ngrok إذا لم يكن يعمل ---
+if command -v ngrok >/dev/null 2>&1; then
+    if ! nc -z 127.0.0.1 4040 >/dev/null 2>&1; then
+        nohup bash "$PROJECT_DIR/start-ngrok.sh" >/dev/null 2>&1 &
+        sleep 3
+    fi
+    if [ -f "$PROJECT_DIR/url.txt" ]; then
+        echo -e "\033[1;34m🌐 رابط ngrok الحالي: $(cat $PROJECT_DIR/url.txt)\033[0m"
+    fi
+fi
+
+# --- 5. فتح واجهة الويب تلقائي مرة واحدة ---
+if command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "$PROJECT_DIR/frontend/index.html" >/dev/null 2>&1 &
+fi
+
+# --- 6. مراقبة أي خدمة توقفت وإعادة تشغيلها تلقائيًا ---
+(
+while true; do
+    for APP in $(pm2 list --no-color | grep -iE "errored|stopped" | awk '{print $2}'); do
+        pm2 restart "$APP" >/dev/null 2>&1
+    done
+    sleep 2
+done
+) &
+
+# --- 7. إخراج نهائي ---
+echo -e "\033[1;32m🟢 سِراج جاهز ومشتغل بالكامل! استخدم 'pm2 list' لمتابعة الخدمات 🟢\033[0m"

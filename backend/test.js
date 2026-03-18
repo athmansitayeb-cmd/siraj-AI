@@ -1,11 +1,20 @@
 // test.js
-const { processInput } = require("./brain.cjs");
+import Groq from "openai";
 
-(async () => {
+const openai = new Groq({
+  apiKey: "40906a9e1ccaa40089a3481bec2e2f9d385b0a3575612a1826deef6f4fd1719eabf8eaf36fd88bbb9d58e540a4785bf83ea94a8fa441dd670b7f54099122e5cf"
+});
+
+async function run() {
   try {
-    const result = await processInput("السلام عليكم");
-    console.log(result);
+    const res = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: "Hello" }]
+    });
+    console.log(res.choices[0].message.content);
   } catch (err) {
-    console.error("Error during processInput:", err);
+    console.error(err);
   }
-})();
+}
+
+run();

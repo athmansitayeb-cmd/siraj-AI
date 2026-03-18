@@ -1,0 +1,40 @@
+version: "3.8"
+
+services:
+
+  mongo:
+    image: mongo:6
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - siraj_net
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    ports:
+      - "5000:5000"
+    networks:
+      - siraj_net
+    command: sh -c "node siraj_v10_ultimate.cjs"
+
+  frontend:
+    build: ./frontend-react
+    command: npm run dev -- --host 0.0.0.0
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - siraj_net
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+
+volumes:
+  mongo_data:
+
+networks:
+  siraj_net:

@@ -1,0 +1,35 @@
+#!/bin/bash
+# start-siraj-final.sh إطلاق SIRAJ بأمر واحد وبشكل نظيف ونهائي
+BASE_DIR="$HOME/siraj" cd "$BASE_DIR" || { echo "لم أتمكن من الدخول للمجلد $BASE_DIR"; exit 1; } echo "🌌 تحديث 
+المشروع من GitHub..." git pull origin main || echo "تنبيه: فشل التحديث من GitHub" echo 
+"-------------------------------------------"
+# التطبيقات ومساراتها
+declare -A apps apps=( ["siraj-backend"]="siraj-backend/app.js" ["siraj-dashboard"]="siraj-dashboard/app.js" 
+  ["siraj-brain"]="siraj-brain/app.js" ["siraj-monitor"]="siraj-monitor/app.js" 
+  ["siraj-watchdog"]="siraj-watchdog/app.js" ["siraj-all"]="siraj-all/app.js"
+)
+# فحص الملفات
+missing=0 for app in "${!apps[@]}"; do script="${apps[$app]}" if [ ! -f "$script" ]; then echo "❌ الملف مفقود: 
+    $script" missing=1
+  fi done if [ $missing -eq 1 ]; then echo "يجب تصحيح الملفات قبل التشغيل." exit 1 fi echo 
+"-------------------------------------------" echo "🧹 تنظيف عمليات PM2 القديمة..." pm2 delete all 2>/dev/null
+# إنشاء ملف الإيكوسيستم
+cat > "$BASE_DIR/ecosystem.config.js" << 'EOF' module.exports = { apps: [ { name: "siraj-backend", script: 
+    "./siraj-backend/app.js", instances: 1, autorestart: true, watch: false }, { name: "siraj-dashboard", 
+    script: "./siraj-dashboard/app.js", instances: 1, autorestart: true, watch: false }, { name: "siraj-brain", 
+    script: "./siraj-brain/app.js", instances: 1, autorestart: true, watch: false }, { name: "siraj-monitor", 
+    script: "./siraj-monitor/app.js", instances: 1, autorestart: true, watch: false }, { name: "siraj-watchdog", 
+    script: "./siraj-watchdog/app.js", instances: 1, autorestart: true, watch: false }, { name: "siraj-all", 
+    script: "./siraj-all/app.js", instances: 1, autorestart: true, watch: false }
+  ]
+};
+EOF echo "🚀 تشغيل التطبيقات..." pm2 start "$BASE_DIR/ecosystem.config.js" pm2 save
+# إعداد التشغيل التلقائي
+sudo env PATH=$PATH:/usr/bin pm2 startup systemd -u $USER --hp $HOME >/dev/null pm2 save
+# تشغيل ngrok لكل منفذ
+echo "🌐 تشغيل ngrok..." ports=(3000 3001 3002 3003 3004 3005) for port in "${ports[@]}"; do pkill -f "ngrok 
+  http $port" 2>/dev/null nohup ngrok http "$port" >/dev/null 2>&1 &
+done sleep 3 echo "-------------------------------------------" echo "🔗 روابط ngrok:" curl -s 
+http://127.0.0.1:4040/api/tunnels | grep -o 'https://[a-zA-Z0-9./_-]*' echo 
+"-------------------------------------------" echo "✅ كل شيء يعمل الآن."
+pm2 lis
