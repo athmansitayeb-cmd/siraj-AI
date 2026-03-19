@@ -1,10 +1,22 @@
 import Navbar from "../components/Navbar";
+import Sidebar from "../components/Sidebar";
 
 export default function MainLayout({ children }) {
   return (
-    <div className="min-h-screen bg-black text-yellow-400">
-      <Navbar />
-      <main className="max-w-6xl mx-auto p-6">{children}</main>
+    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-black via-gray-900 to-black">
+
+      <Sidebar />
+
+      <div className="flex-1 flex flex-col">
+        <Navbar />
+
+        <main className="flex-1 p-6 overflow-y-auto">
+          <div className="glass p-6 h-full">
+            {children}
+          </div>
+        </main>
+      </div>
+
     </div>
   );
 }

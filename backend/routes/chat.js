@@ -1,5 +1,6 @@
 import express from "express";
 import Groq from "groq-sdk";
+import Chat from "../models/Chat.js";
 
 const router = express.Router();
 
@@ -9,21 +10,41 @@ const groq = new Groq({
 
 router.post("/", async (req, res) => {
   try {
-    const { message } = req.body;
-    if (!message) return res.status(400).json({ msg: "Message required" });
+    const { message, history = [] } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ msg: "Message required" });
+    }
 
     const completion = await groq.chat.completions.create({
       model: "llama-3.3-70b-versatile",
-      messages: [{ role: "user", content: message }],
+      messages: [
+        {
+          role: "system",
+          content: "You are SIRAJ Ultra AI, elite, precise, and intelligent."
+        },
+        ...history,
+        { role: "user", content: message }
+      ],
     });
 
-    res.json({
-      reply: completion.choices[0].message.content,
+    const reply = completion.choices[0].message.content;
+
+    // حفظ في MongoDB
+    await Chat.create({
+      userId: "guest",
+      messages: [
+        ...history,
+        { role: "user", content: message },
+        { role: "assistant", content: reply }
+      ]
     });
+
+    res.json({ reply });
 
   } catch (err) {
-    console.error("GROQ ERROR:", err.response?.data || err.message || err);
-    res.status(500).json({ msg: err.message });
+    console.error("GROQ ERROR:", err);
+    res.status(500).json({ msg: "AI Error" });
   }
 });
 

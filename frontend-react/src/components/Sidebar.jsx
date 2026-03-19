@@ -1,16 +1,36 @@
+import { useEffect } from "react";
+import { useChatStore } from "../context/chatStore";
+
 export default function Sidebar() {
-  const users = ["Alice", "Bob", "Charlie", "David"];
+  const { chats, fetchChats, createChat, currentChatId, setCurrentChat } = useChatStore();
+
+  useEffect(() => {
+    fetchChats();
+  }, []);
 
   return (
-    <aside className="w-64 bg-black border-r border-yellow-400 p-4">
-      <h2 className="text-yellow-400 font-bold mb-4">Users</h2>
-      <ul>
-        {users.map((user) => (
-          <li key={user} className="mb-2 p-2 rounded hover:bg-yellow-400 hover:text-black cursor-pointer">
-            {user}
-          </li>
+    <aside className="w-64 p-4 border-r border-white/10 hidden md:flex flex-col">
+
+      <button onClick={createChat} className="btn mb-4">
+        + New Chat
+      </button>
+
+      <div className="flex-1 overflow-y-auto space-y-2">
+        {chats.map(chat => (
+          <div
+            key={chat._id}
+            onClick={() => setCurrentChat(chat._id)}
+            className={`p-2 rounded cursor-pointer text-sm ${
+              currentChatId === chat._id
+                ? "bg-primary text-black"
+                : "hover:bg-white/10"
+            }`}
+          >
+            {chat.title}
+          </div>
         ))}
-      </ul>
+      </div>
+
     </aside>
   );
 }
