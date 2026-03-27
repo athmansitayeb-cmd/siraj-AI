@@ -1,14 +1,13 @@
 import jwt from "jsonwebtoken";
 
-export default function auth(req, res, next) {
-  const token = req.header("Authorization")?.split(" ")[1]; // Bearer TOKEN
-  if (!token) return res.status(401).json({ msg: "غير مصرح" });
+export default function verifyToken(req, res, next) {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ msg: "Unauthorized" });
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
+    req.user = jwt.verify(token, process.env.JWT_SECRET);
     next();
   } catch {
-    res.status(401).json({ msg: "رمز غير صالح" });
+    res.status(401).json({ msg: "Invalid token" });
   }
 }

@@ -1,8 +1,8 @@
 import express from "express";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
-import fetch from "node-fetch"; // لاستدعاء Brevo API
-import 'dotenv/config';
+import fetch from "node-fetch";
+import "dotenv/config";
 
 const router = express.Router();
 
@@ -17,6 +17,7 @@ router.post("/register", async (req, res) => {
       return res.status(400).json({ msg: "جميع الحقول مطلوبة" });
 
     const existing = await User.findOne({ email });
+
     if (existing)
       return res.status(400).json({ msg: "البريد مسجل مسبقاً" });
 
@@ -33,6 +34,7 @@ router.post("/register", async (req, res) => {
       token,
       user: { id: user._id, name: user.name, email: user.email },
     });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ msg: "خطأ في السيرفر" });
@@ -50,10 +52,12 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ msg: "جميع الحقول مطلوبة" });
 
     const user = await User.findOne({ email });
+
     if (!user)
       return res.status(404).json({ msg: "البريد غير موجود" });
 
     const isMatch = await user.comparePassword(password);
+
     if (!isMatch)
       return res.status(401).json({ msg: "كلمة المرور خاطئة" });
 
@@ -67,6 +71,7 @@ router.post("/login", async (req, res) => {
       token,
       user: { id: user._id, name: user.name, email: user.email },
     });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ msg: "خطأ في السيرفر" });
@@ -74,15 +79,17 @@ router.post("/login", async (req, res) => {
 });
 
 /* ============================
-   3. Forgot Password via Brevo API
+   3. Forgot Password
 ============================ */
 router.post("/forgot-password", async (req, res) => {
   try {
     const { email } = req.body;
+
     if (!email)
       return res.status(400).json({ msg: "البريد مطلوب" });
 
     const user = await User.findOne({ email });
+
     if (!user)
       return res.status(404).json({ msg: "البريد غير موجود" });
 
@@ -94,37 +101,45 @@ router.post("/forgot-password", async (req, res) => {
 
     const resetLink = `${process.env.FRONTEND_URL}/reset-password/${token}`;
 
-    // إرسال البريد عبر Brevo API
+    const htmlContent = `
+<html>
+  <body>
+    <h2>Password Reset Request</h2>
+    <p>Click below to reset your password:</p>
+    <a href="${resetLink}">${resetLink}</a>
+    <p>This link expires in 15 minutes.</p>
+  </body>
+</html>
+`;
+
     const response = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "api-key": process.env.BREVO_API_KEY // مفتاح API الصحيح
+        "api-key": process.env.BREVO_API_KEY
       },
       body: JSON.stringify({
-        sender: { name: "SIRAJ AI", email: "no-reply@siraj.software" }, // sender الصحيح
+        sender: { name: "SIRAJ AI", email: "no-reply@siraj.software" },
         to: [{ email: user.email, name: user.name }],
         subject: "Reset Password - SIRAJ AI",
-        htmlContent: `
-          <h2>Password Reset Request</h2>
-          <p>Click below to reset your password:</p>
-          <a href="${resetLink}">${resetLink}</a>
-          <p>This link expires in 15 minutes.</p>
-        `
+        htmlContent
       })
     });
 
     if (!response.ok) {
-      console.error("Brevo API error:", await response.text());
+      const errorText = await response.text();
+      console.error("Brevo API error:", errorText);
       return res.status(500).json({ msg: "فشل إرسال البريد" });
     }
 
-    res.json({ msg: "تم إرسال رابط إعادة التعيين إلى بريدك" });
+    res.json({ msg: "تم إرسال رابط إعادة التعيين" });
+
   } catch (err) {
     console.error(err);
-    res.status(500).json({ msg: "فشل إرسال البريد" });
+    res.status(500).json({ msg: "خطأ في السيرفر" });
   }
 });
+
 /* ============================
    4. Reset Password
 ============================ */
@@ -137,8 +152,8 @@ router.post("/reset-password/:token", async (req, res) => {
       return res.status(400).json({ msg: "كلمة المرور مطلوبة" });
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
     const user = await User.findById(decoded.id);
+
     if (!user)
       return res.status(404).json({ msg: "المستخدم غير موجود" });
 
@@ -146,6 +161,7 @@ router.post("/reset-password/:token", async (req, res) => {
     await user.save();
 
     res.json({ msg: "تم تحديث كلمة المرور بنجاح" });
+
   } catch (err) {
     console.error(err);
     res.status(400).json({ msg: "الرابط غير صالح أو منتهي" });
