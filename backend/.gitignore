@@ -10,3 +10,7 @@ uploads/
 venv/
 *.bak
 *.save
+test*
+*.backup.js
+*.bak
+*.save
