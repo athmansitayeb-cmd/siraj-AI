@@ -1,0 +1,36 @@
+name: SIRAJ Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            echo "🚀 Deploy started"
+
+            cd /opt/siraj
+            git pull origin main
+
+            echo "📦 Backend..."
+            cd backend
+            npm install
+
+            pm2 restart siraj-backend || pm2 start server.js --name siraj-backend
+
+            echo "⚡ Frontend build..."
+            cd ../frontend-react
+            npm install
+            npm run build
+
+            echo "✅ Deploy finished"
