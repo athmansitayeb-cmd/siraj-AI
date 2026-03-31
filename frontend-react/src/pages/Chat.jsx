@@ -1,101 +1,139 @@
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { io } from "socket.io-client";
 import MainLayout from "../layout/MainLayout";
-import axios from "axios";
 import { motion } from "framer-motion";
+
+function renderMessage(text) {
+  if (!text) return "";
+
+  return text
+    .replace(/```([\s\S]*?)```/g,
+      (_, code) =>
+        `<pre class="bg-black text-green-300 p-3 border border-yellow-500 rounded-xl overflow-x-auto">${code}</pre>`
+    )
+    .replace(/`([^`]+)`/g, "<code class='text-yellow-400'>$1</code>")
+    .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>");
+}
 
 export default function Chat() {
   const [messages, setMessages] = useState([
-    { role: "assistant", content: "🚀 Welcome to SIRAJ Ultra AI" }
+    { role: "assistant", content: "🚀 SIRAJ ONLINE" }
   ]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
 
-  const bottomRef = useRef();
+  const [input, setInput] = useState("");
+  const socketRef = useRef(null);
+  const bottomRef = useRef(null);
+
+  const conversationId = "main-chat";
+
+  useEffect(() => {
+    const socket = io("https://siraj.software", {
+      path: "/socket.io",
+      transports: ["websocket", "polling"],
+      auth: {
+        token: localStorage.getItem("siraj_token") || null
+      }
+    });
+
+    socketRef.current = socket;
+
+    // STREAM
+    socket.on("message-stream", (data) => {
+      setMessages((prev) => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+
+        if (last?.role === "assistant") {
+          updated[updated.length - 1] = {
+            ...last,
+            content: last.content + (data.token || "")
+          };
+        }
+
+        return updated;
+      });
+    });
+
+    socket.on("message-error", () => {
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "⚠️ ERROR" }
+      ]);
+    });
+
+    // LOAD HISTORY
+    fetch("https://siraj.software/api/conversation/main-chat", {
+      headers: {
+        Authorization: "Bearer " + localStorage.getItem("siraj_token")
+      }
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d?.messages) setMessages(d.messages);
+      });
+
+    return () => socket.disconnect();
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const sendMessage = async () => {
-    if (!input.trim() || loading) return;
+  const sendMessage = () => {
+    if (!input.trim()) return;
 
-    const newMessages = [...messages, { role: "user", content: input }];
-    setMessages(newMessages);
+    const msg = input;
     setInput("");
-    setLoading(true);
 
-    try {
-      const res = await axios.post("/api/chat", {
-        message: input,
-        history: messages
-      });
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: msg },
+      { role: "assistant", content: "" }
+    ]);
 
-      setMessages([...newMessages, {
-        role: "assistant",
-        content: res.data.reply
-      }]);
-
-    } catch {
-      setMessages([...newMessages, {
-        role: "assistant",
-        content: "⚠️ AI Error"
-      }]);
-    }
-
-    setLoading(false);
+    socketRef.current.emit("message", {
+      conversationId,
+      msg
+    });
   };
 
   return (
     <MainLayout>
-      <div className="h-[85vh] flex flex-col bg-black rounded-3xl border border-yellow-400 shadow-2xl overflow-hidden">
+      <div className="h-[90vh] flex flex-col bg-black text-yellow-400">
 
-        {/* Header */}
-        <div className="p-4 border-b border-yellow-400 text-yellow-400 font-bold">
-          SIRAJ ULTRA AI
+        <div className="p-4 border-b border-yellow-500 text-xl font-bold">
+          SIRAJ AI CHAT
         </div>
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.map((m, i) => (
             <motion.div
               key={i}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className={m.role === "user" ? "text-right" : "text-left"}
+              className={`max-w-[70%] p-3 rounded-2xl ${
+                m.role === "user"
+                  ? "ml-auto bg-yellow-400 text-black"
+                  : "bg-gray-900 border border-yellow-500"
+              }`}
             >
-              <div className={`
-                inline-block px-4 py-3 rounded-2xl max-w-md
-                ${m.role === "user"
-                  ? "bg-yellow-400 text-black"
-                  : "bg-gray-800 text-yellow-400 border border-yellow-400/20"}
-              `}>
-                {m.content}
-              </div>
+              <div dangerouslySetInnerHTML={{ __html: renderMessage(m.content) }} />
             </motion.div>
           ))}
-
-          {loading && (
-            <div className="text-yellow-400 text-sm animate-pulse">
-              SIRAJ is thinking...
-            </div>
-          )}
-
           <div ref={bottomRef} />
         </div>
 
-        {/* Input */}
-        <div className="p-4 border-t border-yellow-400 flex gap-2">
+        <div className="p-4 border-t border-yellow-500 flex gap-2">
           <input
+            className="flex-1 p-3 rounded-xl bg-gray-900 border border-yellow-500"
             value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && sendMessage()}
-            placeholder="Ask anything..."
-            className="flex-1 p-3 rounded-xl bg-black border border-yellow-400 text-yellow-400 outline-none focus:ring-2 focus:ring-yellow-400"
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
           />
 
           <button
             onClick={sendMessage}
-            className="px-6 py-3 bg-yellow-400 text-black rounded-xl font-bold hover:scale-105 transition"
+            className="px-6 bg-yellow-400 text-black rounded-xl font-bold"
           >
             Send
           </button>

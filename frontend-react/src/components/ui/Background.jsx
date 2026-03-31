@@ -1,13 +1,15 @@
-import { motion } from "framer-motion";
+import { Canvas } from "@react-three/fiber";
+import { Sphere, MeshDistortMaterial, OrbitControls } from "@react-three/drei";
 
 export default function Background() {
   return (
-    <div className="absolute inset-0 -z-10 overflow-hidden">
-      <motion.div
-        className="absolute w-[600px] h-[600px] bg-yellow-400/20 rounded-full blur-3xl"
-        animate={{ x: [0, 200, -200, 0], y: [0, -100, 100, 0] }}
-        transition={{ duration: 20, repeat: Infinity }}
-      />
-    </div>
+    <Canvas className="absolute inset-0 z-0">
+      <ambientLight intensity={0.4} />
+      <directionalLight position={[5, 5, 5]} intensity={0.7} />
+      <Sphere args={[1.5, 64, 64]} scale={2}>
+        <MeshDistortMaterial color="#facc15" attach="material" distort={0.5} speed={2} />
+      </Sphere>
+      <OrbitControls enableZoom={false} autoRotate autoRotateSpeed={0.3} />
+    </Canvas>
   );
 }

@@ -1,16 +1,50 @@
-import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
-import App from "./App.jsx";
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App";
 import "./index.css";
-import { GoogleOAuthProvider } from "@react-oauth/google";
+import { BrowserRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Toaster } from "react-hot-toast";
 
-// ضع مفتاح Google OAuth الخاص بك هنا أو استخدم متغير بيئة
-const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "YOUR_GOOGLE_CLIENT_ID";
+const queryClient = new QueryClient();
 
-createRoot(document.getElementById("root")).render(
-  <StrictMode>
-    <GoogleOAuthProvider clientId={clientId}>
-      <App />
-    </GoogleOAuthProvider>
-  </StrictMode>
+// ================= Error Boundary =================
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null, info: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, info) {
+    console.error("React Error Caught:", error, info);
+    this.setState({ info });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ color: "red", padding: "20px", whiteSpace: "pre-wrap" }}>
+          <h2>App Crashed</h2>
+          <div>{String(this.state.error)}</div>
+          <div>{this.state.info?.componentStack}</div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <App />
+        <Toaster position="top-right" />
+      </BrowserRouter>
+    </QueryClientProvider>
+  </ErrorBoundary>
 );

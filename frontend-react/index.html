@@ -5,9 +5,16 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>frontend-react</title>
+
+    <!-- تعريف آمن لدالة _ لتجنب أي Error من مكتبات خارجية -->
+    <script>
+      window._ = window._ || function(e, t){ return ""; };
+    </script>
   </head>
   <body>
     <div id="root"></div>
+    
+    <!-- تحميل React و Vite main -->
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
