@@ -1,3 +1,4 @@
+import { getPersonality } from "./personality.js";
 import { analyzeContext } from "./context.js";
 
 export function buildSystemPrompt(messages) {
@@ -9,9 +10,10 @@ export function buildSystemPrompt(messages) {
 لا تخترع.
 `;
 
-  // 🎯 behavior based on context
+  let behavior = "";
+
   if (ctx.isTechnical) {
-    base += `
+    behavior += `
 تعامل كمبرمج خبير:
 - حلول مباشرة
 - خطوات واضحة
@@ -20,30 +22,27 @@ export function buildSystemPrompt(messages) {
   }
 
   if (ctx.level === "beginner") {
-    base += `
-اشرح ببساطة:
-- لا تفترض معرفة مسبقة
+    behavior += `
+اشرح ببساطة
 `;
   }
 
   if (ctx.level === "advanced") {
-    base += `
-قدم إجابة عميقة:
-- تفكير معماري
-- optimization
+    behavior += `
+تحليل عميق + هندسة
 `;
   }
 
   if (ctx.isRepeating) {
-    base += `
-المستخدم يكرر نفسه:
-- لا تعيد نفس الجواب
-- قدم زاوية جديدة أو حل مختلف
+    behavior += `
+لا تعيد نفس الجواب
 `;
   }
 
+  const personality = getPersonality();
+
   return {
     role: "system",
-    content: base
+    content: base + behavior + personality
   };
 }
