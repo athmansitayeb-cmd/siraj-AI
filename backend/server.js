@@ -1,5 +1,4 @@
 import { buildSystemPrompt } from "./core/brain.js";
-import { SYSTEM_PROMPT } from "./core/systemPrompt.js";
 import { sendEmail } from "./services/emailService.js";
 import User from "./models/User.js";
 import express from "express";
@@ -190,21 +189,22 @@ io.on("connection", (socket) => {
         content: msg
       });
 
-      const recent = convo.messages
-        .slice(-12)
-        .map(m => ({ role: m.role, content: m.content }));
+const recent = convo.messages
+  .slice(-20)
+  .map(m => ({ role: m.role, content: m.content }));
+
+      const systemPrompt = buildSystemPrompt(convo.messages);
 
       const completion = await groq.chat.completions.create({
         model: "llama-3.3-70b-versatile",
         messages: [
-           buildSystemPrompt(recent),
+          systemPrompt,
           ...recent
         ],
         temperature: 0.6,
         max_tokens: 700,
         stream: true
       });
-
       let full = "";
 
       for await (const chunk of completion) {
