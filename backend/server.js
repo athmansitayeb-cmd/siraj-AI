@@ -1,3 +1,4 @@
+import { SYSTEM_PROMPT } from "./core/systemPrompt.js";
 import { sendEmail } from "./services/emailService.js";
 import User from "./models/User.js";
 import express from "express";
@@ -194,7 +195,10 @@ io.on("connection", (socket) => {
 
       const completion = await groq.chat.completions.create({
         model: "llama-3.3-70b-versatile",
-        messages: recent,
+        messages: [
+          SYSTEM_PROMPT,
+          ...recent
+        ],
         temperature: 0.6,
         max_tokens: 700,
         stream: true

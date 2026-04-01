@@ -1,3 +1,4 @@
+import { SYSTEM_PROMPT } from "../core/systemPrompt.js";
 import axios from "axios";
 
 export async function fetchAI(prompt) {
@@ -6,7 +7,10 @@ export async function fetchAI(prompt) {
       "https://api.groq.com/openai/v1/chat/completions",
       {
         model: "llama3-70b-8192",
-        messages: [{ role: "user", content: prompt }],
+        messages: [
+          SYSTEM_PROMPT,
+          { role: "user", content: prompt }
+        ],
       },
       {
         headers: {
