@@ -1,49 +1,44 @@
+import { analyzeContext } from "./context.js";
+
 export function buildSystemPrompt(messages) {
-  const lastUserMessage = messages
-    .filter(m => m.role === "user")
-    .slice(-1)[0]?.content || "";
+  const ctx = analyzeContext(messages);
 
-  let mode = "general";
-
-  // 🧠 detect intent
-  if (lastUserMessage.match(/code|error|bug|npm|react|server/i)) {
-    mode = "technical";
-  } else if (lastUserMessage.match(/شرح|تفسير|معنى/i)) {
-    mode = "explanation";
-  } else if (lastUserMessage.match(/اختصر|تلخيص/i)) {
-    mode = "summary";
-  }
-
-  // 🎯 base identity
   let base = `
 أنت SIRAJ AI.
 دقيق، صادق، واضح.
 لا تخترع.
 `;
 
-  // 🔀 dynamic behavior
-  if (mode === "technical") {
+  // 🎯 behavior based on context
+  if (ctx.isTechnical) {
     base += `
 تعامل كمبرمج خبير:
-- أعط خطوات واضحة
-- لا تنظير
 - حلول مباشرة
+- خطوات واضحة
+- لا تنظير
 `;
   }
 
-  if (mode === "explanation") {
+  if (ctx.level === "beginner") {
     base += `
-اشرح بوضوح وعمق:
-- لا تعقيد
-- لا حشو
+اشرح ببساطة:
+- لا تفترض معرفة مسبقة
 `;
   }
 
-  if (mode === "summary") {
+  if (ctx.level === "advanced") {
     base += `
-اختصر:
-- نقاط فقط
-- بدون إطالة
+قدم إجابة عميقة:
+- تفكير معماري
+- optimization
+`;
+  }
+
+  if (ctx.isRepeating) {
+    base += `
+المستخدم يكرر نفسه:
+- لا تعيد نفس الجواب
+- قدم زاوية جديدة أو حل مختلف
 `;
   }
 
