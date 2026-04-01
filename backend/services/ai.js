@@ -1,3 +1,4 @@
+import { buildSystemPrompt } from "../core/brain.js";
 import { SYSTEM_PROMPT } from "../core/systemPrompt.js";
 import axios from "axios";
 
@@ -8,7 +9,7 @@ export async function fetchAI(prompt) {
       {
         model: "llama3-70b-8192",
         messages: [
-          SYSTEM_PROMPT,
+           buildSystemPrompt([{ role: "user", content: prompt }]),
           { role: "user", content: prompt }
         ],
       },
