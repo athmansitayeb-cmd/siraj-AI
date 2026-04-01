@@ -1,3 +1,4 @@
+import { guardResponse } from "./core/guard.js";
 import { buildSystemPrompt } from "./core/brain.js";
 import { sendEmail } from "./services/emailService.js";
 import User from "./models/User.js";
@@ -212,11 +213,21 @@ const recent = convo.messages
         if (!token) continue;
 
         full += token;
-
-        socket.emit("message-stream", { token });
+         socket.emit("message-stream", { token });
       }
 
       socket.emit("message-stream-done");
+
+// 🔒 GUARD CHECK (هنا مكانه الصحيح)
+      const result = guardResponse(full);
+
+      if (!result.ok) {
+        socket.emit("message-error", {
+          msg: "REJECTED_RESPONSE",
+          reason: result.reason
+        });
+        return;
+      }
 
       pushUnique(convo.messages, {
         role: "assistant",
