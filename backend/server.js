@@ -1,5 +1,6 @@
 import authRouter from "./routes/auth.js";
 import conversationRouter from "./routes/conversation.js";
+import { updateUserMemory } from "./core/userMemory.js";
 import { orchestrate } from "./core/orchestrator.js";
 import { runtimeGate } from "./core/runtime.js";
 import { buildSystemPrompt } from "./core/brain.js";
@@ -20,7 +21,6 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { Server } from "socket.io";
 import { createClient } from "redis";
-import Groq from "groq-sdk";
 
 import connectDB from "./config/db.js";
 import Conversation from "./models/Conversation.js";
@@ -30,7 +30,6 @@ import summarizeRouter from "./routes/summarize.js";
 import emailRouter from "./routes/email.js";
 
 dotenv.config();
-await connectDB();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -52,7 +51,7 @@ app.get("/api/health", (req, res) => {
     status: "ok",
     service: "siraj-backend",
     mongo: mongoose.connection.readyState === 1,
-    redis: redis.isOpen,
+    redis: redis?.isOpen || false,
     uptime: process.uptime()
   });
 });
@@ -86,7 +85,6 @@ const requireAuth = (req, res, next) => {
 // ================= REDIS =================
 const redis = createClient({ url: process.env.REDIS_URL });
 redis.on("error", () => console.log("Redis fallback mode"));
-await redis.connect();
 
 // ================= SERVER =================
 const server = http.createServer(app);
@@ -113,7 +111,6 @@ io.use((socket, next) => {
 });
 
 // ================= GROQ =================
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 // ================= SOCKET CHAT =================
 io.on("connection", (socket) => {
@@ -139,32 +136,26 @@ io.on("connection", (socket) => {
 
       pushUnique(convo.messages, { role: "user", content: msg });
 
-      const orchestrateResult = await orchestrate({
-        convo: convo.messages,
-        msg
-      });
+      await updateUserMemory(socket.user.id, msg);
 
-      if (!orchestrateResult.ok) {
-        socket.emit("message-error", {
-          msg: "AI_BLOCKED",
-          reason: orchestrateResult.reason
-        });
-        return;
-      }
+const orchestrateResult = await orchestrate({
+  convo: convo.messages,
+  msg,
+  userId: socket.user.id
+});
 
-      const completion = orchestrateResult.stream;
+if (!orchestrateResult.ok) {
+  socket.emit("message-error", {
+    msg: "AI_BLOCKED",
+    reason: orchestrateResult.reason
+  });
+  return;
+}
 
-      let full = "";
+const full = orchestrateResult.text;
 
-      for await (const chunk of completion) {
-        const token = chunk.choices?.[0]?.delta?.content;
-        if (!token) continue;
-
-        full += token;
-        socket.emit("message-stream", { token });
-      }
-
-      socket.emit("message-stream-done");
+socket.emit("message-stream", { token: full });
+socket.emit("message-stream-done");
 
       // ================= RUNTIME CHECK =================
       const gateResult = runtimeGate(full);
@@ -201,6 +192,21 @@ io.on("connection", (socket) => {
   });
 });
 
-server.listen(process.env.PORT || 5000, () => {
-  console.log("SIRAJ MULTICHAT ONLINE");
-});
+
+const start = async () => {
+  try {
+    await connectDB();
+
+    await redis.connect();
+
+    server.listen(process.env.PORT || 5000, () => {
+      console.log("SIRAJ MULTICHAT ONLINE");
+    });
+
+  } catch (err) {
+    console.error("BOOT ERROR:", err);
+    process.exit(1);
+  }
+};
+
+start();

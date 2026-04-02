@@ -137,6 +137,17 @@ style=${memory.userStyle || "neutral"}
 `;
 }
 
+function buildUserMemoryBlock(memory) {
+  if (!memory) return "";
+
+  return `
+[USER MEMORY]
+facts: ${(memory.facts || []).join(", ")}
+preferences: ${JSON.stringify(memory.preferences || {})}
+profile: ${JSON.stringify(memory.profile || {})}
+`;
+}
+
 /**
  * عقد الإخراج النهائي (مهم جداً)
  */
@@ -153,7 +164,7 @@ function buildOutputContract() {
 /**
  * بناء البرومبت النهائي
  */
-export function buildSystemPrompt(messages) {
+export function buildSystemPrompt(messages, userId, userMemory) {
   const ctx = analyzeContext(messages);
   const memory = extractMemory(messages);
   const personality = getPersonality();
@@ -165,6 +176,7 @@ export function buildSystemPrompt(messages) {
     buildLevel(state),
     buildRepetitionGuard(state),
     buildMemory(memory),
+    buildUserMemoryBlock(userMemory), 
     buildOutputContract(),
     personality
   ]
