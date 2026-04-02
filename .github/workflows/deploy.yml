@@ -2,8 +2,7 @@ name: SIRAJ Deploy
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
 
 jobs:
   deploy:
@@ -17,20 +16,27 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            echo "🚀 Deploy started"
+            set -e
+
+            echo "🚀 Deploy start"
 
             cd /opt/siraj
+            git reset --hard
             git pull origin main
 
-            echo "📦 Backend..."
+            echo "📦 Backend install"
             cd backend
-            npm install
+            npm ci --only=production
 
-            pm2 restart siraj-backend || pm2 start server.js --name siraj-backend
+            echo "♻ Reload backend (zero downtime)"
+            pm2 reload siraj-backend --update-env || pm2 start server.js --name siraj-backend
 
-            echo "⚡ Frontend build..."
+            echo "⚡ Frontend build"
             cd ../frontend-react
-            npm install
+            npm ci
             npm run build
 
-            echo "✅ Deploy finished"
+            echo "💾 Save PM2 state"
+            pm2 save
+
+            echo "✅ Deploy done"
