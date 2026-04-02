@@ -26,54 +26,64 @@ export default function Chat() {
 
   const conversationId = "main-chat";
 
-  useEffect(() => {
-    const socket = io("https://siraj.software", {
-      path: "/socket.io",
-      transports: ["websocket", "polling"],
-      auth: {
-        token: localStorage.getItem("siraj_token") || null
+useEffect(() => {
+  const token = localStorage.getItem("siraj_token");
+
+  if (!token) {
+    console.error("❌ NO TOKEN → socket not started");
+    return;
+  }
+
+  const socket = io("https://siraj.software", {
+    path: "/socket.io",
+    transports: ["websocket", "polling"],
+    auth: { token }
+  });
+
+  socketRef.current = socket;
+
+  socket.on("connect_error", (err) => {
+    console.error("SOCKET ERROR:", err.message);
+  });
+
+  socket.on("message-stream", (data) => {
+    setMessages((prev) => {
+      const updated = [...prev];
+      const last = updated[updated.length - 1];
+
+      if (last?.role === "assistant") {
+        updated[updated.length - 1] = {
+          ...last,
+          content: last.content + (data.token || "")
+        };
       }
+
+      return updated;
+    });
+  });
+
+  socket.on("message-error", (e) => {
+    console.error("SERVER ERROR:", e);
+    setMessages((prev) => [
+      ...prev,
+      { role: "assistant", content: "⚠️ ERROR" }
+    ]);
+  });
+
+  // LOAD HISTORY
+  fetch("https://siraj.software/api/conversation/main-chat", {
+    headers: {
+      Authorization: "Bearer " + token
+    }
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (d?.messages) setMessages(d.messages);
     });
 
-    socketRef.current = socket;
+  return () => socket.disconnect();
+}, []);
 
-    // STREAM
-    socket.on("message-stream", (data) => {
-      setMessages((prev) => {
-        const updated = [...prev];
-        const last = updated[updated.length - 1];
-
-        if (last?.role === "assistant") {
-          updated[updated.length - 1] = {
-            ...last,
-            content: last.content + (data.token || "")
-          };
-        }
-
-        return updated;
-      });
-    });
-
-    socket.on("message-error", () => {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "⚠️ ERROR" }
-      ]);
-    });
-
-    // LOAD HISTORY
-    fetch("https://siraj.software/api/conversation/main-chat", {
-      headers: {
-        Authorization: "Bearer " + localStorage.getItem("siraj_token")
-      }
-    })
-      .then(r => r.json())
-      .then(d => {
-        if (d?.messages) setMessages(d.messages);
-      });
-
-    return () => socket.disconnect();
-  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
