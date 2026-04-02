@@ -1,40 +1,24 @@
-export function guardResponse(text, context = {}) {
-  if (!text || typeof text !== "string") {
-    return { ok: false, reason: "empty_response" };
-  }
+import { isNoise } from "./noise.js";
+import { isSemanticallyWeak } from "./semantic.js";
 
-  const trimmed = text.trim();
-
-  // 1. منع الردود الفارغة أو الضعيفة
-  if (trimmed.length < 10) {
+export function guardResponse(text) {
+  if (!text || text.trim().length < 10) {
     return { ok: false, reason: "too_short" };
   }
 
-  // 2. منع التكرار المفرط
-  const words = trimmed.split(" ");
-  const uniqueWords = new Set(words);
-
-  if (uniqueWords.size / words.length < 0.4) {
-    return { ok: false, reason: "repetitive" };
+  if (isNoise(text)) {
+    return { ok: false, reason: "noise_detected" };
   }
 
-  // 3. منع الهلوسة الواضحة (أنماط خطيرة)
-  const badPatterns = [
-    "I think maybe",
-    "maybe possibly",
-    "not sure but",
-    "could be anything"
-  ];
-
-  for (const p of badPatterns) {
-    if (trimmed.toLowerCase().includes(p.toLowerCase())) {
-      return { ok: false, reason: "low_confidence" };
-    }
+  if (isSemanticallyWeak(text)) {
+    return { ok: false, reason: "weak_semantics" };
   }
 
-  // 4. تحقق بسيط من التماسك
-  if (trimmed.split(".").length > 15 && trimmed.length < 200) {
-    return { ok: false, reason: "fragmented_response" };
+  const words = text.split(" ");
+  const unique = new Set(words);
+
+  if (words.length > 0 && unique.size / words.length < 0.4) {
+    return { ok: false, reason: "repetition" };
   }
 
   return { ok: true };
