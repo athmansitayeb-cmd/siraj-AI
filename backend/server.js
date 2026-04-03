@@ -1,5 +1,4 @@
-import dotenv from 'dotenv';
-dotenv.config({ path: '/opt/siraj/backend/.env' });
+import 'dotenv/config';
 import mongoose from "mongoose";
 import connectDB from "./config/db.js";
 import { orchestrate } from "./core/orchestrator.js";

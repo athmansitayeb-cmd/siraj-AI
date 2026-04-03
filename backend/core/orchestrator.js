@@ -2,7 +2,19 @@ import { getUserMemory } from "./userMemory.js";
 import Groq from "groq-sdk";
 import { buildSystemPrompt } from "./brain.js";
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+let groq;
+
+function getGroq() {
+  if (!process.env.GROQ_API_KEY) {
+    throw new Error("GROQ_API_KEY missing at runtime");
+  }
+
+  if (!groq) {
+    groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+  }
+
+  return groq;
+}
 
 export async function orchestrate({ convo, msg, userId }) {
   try {
@@ -18,7 +30,7 @@ export async function orchestrate({ convo, msg, userId }) {
 
     const systemPrompt = buildSystemPrompt(convo, userId, userMemory);
 
-    const completion = await groq.chat.completions.create({
+    const completion = await getGroq().chat.completions.create({
       model: "llama-3.3-70b-versatile",
       messages: [
         systemPrompt,
