@@ -54,3 +54,9 @@ google-chrome-stable_current_amd64.deb
 *.config
 *.json
 *.yml
+adb
+wsl
+*.db
+.env
+node_modules
+SirajMobile
