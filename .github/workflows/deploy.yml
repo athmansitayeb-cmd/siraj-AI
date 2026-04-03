@@ -9,6 +9,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -26,17 +29,13 @@ jobs:
 
             echo "📦 Backend install"
             cd backend
-            npm ci --only=production
+            npm ci --omit=dev
 
-            echo "♻ Reload backend (zero downtime)"
+            echo "♻ Reload backend"
             pm2 reload siraj-backend --update-env || pm2 start server.js --name siraj-backend
 
-            echo "⚡ Frontend build"
-            cd ../frontend-react
-            npm ci
-            npm run build
+            echo "⚡ NO frontend build on server (CI handles it)"
 
-            echo "💾 Save PM2 state"
             pm2 save
 
             echo "✅ Deploy done"
