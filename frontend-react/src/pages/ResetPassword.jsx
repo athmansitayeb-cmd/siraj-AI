@@ -3,11 +3,13 @@ import { useForm } from "react-hook-form";
 import { motion } from "framer-motion";
 import api from "../services/api";
 import toast from "react-hot-toast";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import handleApiError from "../utils/handleApiError";
 
 export default function ResetPassword() {
   const { token } = useParams();
+  const [params] = useSearchParams();
+  const email = params.get("email");
   const navigate = useNavigate();
   const { register, handleSubmit, formState: { errors } } = useForm();
 
@@ -15,7 +17,8 @@ export default function ResetPassword() {
     try {
          await api.post(`/auth/reset-password`, {
       token,
-      password: data.password
+      email,  
+    newPassword: data.password
     });
 
       toast.success("Password updated");

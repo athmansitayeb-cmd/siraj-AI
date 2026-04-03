@@ -5,9 +5,9 @@ module.exports = {
       script: "server.js",
       cwd: "/opt/siraj/backend",
       interpreter: "node",
-      args: "-r dotenv/config",
+      env_file: ".env",
       env: {
-        NODE_ENV: "production",
+        NODE_ENV: "production"
       }
     }
   ]

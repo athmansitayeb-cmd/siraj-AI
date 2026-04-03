@@ -3,6 +3,7 @@ import axios from "axios";
 export const sendEmail = async ({ to, subject, htmlContent }) => {
   try {
     console.log("BREVO KEY LOADED:", !!process.env.BREVO_API_KEY);
+
     const res = await axios.post(
       "https://api.brevo.com/v3/smtp/email",
       {
@@ -10,7 +11,11 @@ export const sendEmail = async ({ to, subject, htmlContent }) => {
           name: "SIRAJ",
           email: "no-reply@siraj.software"
         },
-        to: [{ email: to }],
+        to: [
+          {
+            email: to
+          }
+        ],
         subject,
         htmlContent
       },

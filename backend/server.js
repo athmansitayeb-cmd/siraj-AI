@@ -135,10 +135,30 @@ io.on("connection", (socket) => {
 
       await updateUserMemory(socket.user.id, msg);
 
+const lastMsgKey = `last:${socket.user.id}`;
+const last = await redis.get(lastMsgKey);
+
+if (last === msg) return;
+
+await redis.setEx(lastMsgKey, 2, msg);
+
+const rateKey = `rl:${socket.user.id}`;
+const count = await redis.incr(rateKey);
+
+if (count === 1) await redis.expire(rateKey, 60);
+
+if (count > 25) {
+  socket.emit("message-error", {
+    msg: "RATE_LIMIT_AI"
+  });
+  return;
+}
+
 const orchestrateResult = await orchestrate({
   convo: convo.messages,
   msg,
-  userId: socket.user.id
+  userId: socket.user.id,
+  redis
 });
 
 if (!orchestrateResult.ok) {
@@ -151,7 +171,19 @@ if (!orchestrateResult.ok) {
 
 const full = orchestrateResult.text;
 
-socket.emit("message-stream", { token: full });
+const text = orchestrateResult.text;
+
+// streaming controlled + stable
+let buffer = "";
+
+for (const token of text.split(/(\s+)/)) {
+  buffer += token;
+
+  socket.emit("message-stream", {
+    token
+  });
+}
+
 socket.emit("message-stream-done");
 
       // ================= RUNTIME CHECK =================
