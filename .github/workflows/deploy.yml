@@ -8,14 +8,20 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
     steps:
+      # ================= CHECKOUT =================
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ================= NODE =================
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22.x
+          cache: 'npm'
 
       # ================= BUILD FRONTEND =================
       - name: Install frontend deps
@@ -26,18 +32,29 @@ jobs:
         working-directory: ./frontend-react
         run: npm run build
 
-      # ================= COPY DIST =================
-      - name: Copy frontend to server
+      # ================= CLEAN DIST ON SERVER =================
+      - name: Clean old frontend
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            rm -rf /opt/siraj/frontend-react/dist/*
+
+      # ================= UPLOAD NEW DIST =================
+      - name: Upload frontend
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_KEY }}
-          source: "frontend-react/dist/*"
-          target: "/opt/siraj/frontend-react/dist"
+          source: "frontend-react/dist"
+          target: "/opt/siraj/frontend-react"
+          strip_components: 1
 
       # ================= BACKEND DEPLOY =================
-      - name: Deploy backend via SSH
+      - name: Deploy backend
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_IP }}
@@ -53,6 +70,6 @@ jobs:
             cd backend
             npm ci --omit=dev
 
-            pm2 reload siraj-backend --update-env || pm2 start server.js --name siraj-backend
+            pm2 reload siraj-backend --update-env || pm2 start ecosystem.config.cjs
 
             pm2 save
