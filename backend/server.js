@@ -1,13 +1,16 @@
+import dotenv from 'dotenv';
+dotenv.config({ path: '/opt/siraj/backend/.env' });
+import mongoose from "mongoose";
+import connectDB from "./config/db.js";
+import { orchestrate } from "./core/orchestrator.js";
 import authRouter from "./routes/auth.js";
 import conversationRouter from "./routes/conversation.js";
 import { updateUserMemory } from "./core/userMemory.js";
-import { orchestrate } from "./core/orchestrator.js";
 import { runtimeGate } from "./core/runtime.js";
 import { buildSystemPrompt } from "./core/brain.js";
 import { sendEmail } from "./services/emailService.js";
 import User from "./models/User.js";
 import express from "express";
-import dotenv from "dotenv";
 import http from "http";
 import cors from "cors";
 import helmet from "helmet";
@@ -15,21 +18,16 @@ import xss from "xss-clean";
 import hpp from "hpp";
 import mongoSanitize from "express-mongo-sanitize";
 import rateLimit from "express-rate-limit";
-import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
 import path from "path";
 import { fileURLToPath } from "url";
 import { Server } from "socket.io";
 import { createClient } from "redis";
-
-import connectDB from "./config/db.js";
 import Conversation from "./models/Conversation.js";
 import { safeConversationId, pushUnique } from "./patch_core.js";
 import crypto from "crypto";
 import summarizeRouter from "./routes/summarize.js";
 import emailRouter from "./routes/email.js";
-
-dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
