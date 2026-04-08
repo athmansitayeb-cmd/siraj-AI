@@ -2,22 +2,8 @@ import { extractMemory } from "./memory.js";
 import { getPersonality } from "./personality.js";
 import { analyzeContext } from "./context.js";
 
-/**
- * تنظيف نص
- */
 const clean = (t) => t.replace(/\s+/g, " ").trim();
 
-/**
- * منع تلاصق العربية والإنجليزية
- */
-const bilingualFix = (t) =>
-  t
-    .replace(/([\u0600-\u06FF])([A-Za-z0-9])/g, "$1 | $2")
-    .replace(/([A-Za-z0-9])([\u0600-\u06FF])/g, "$1 | $2");
-
-/**
- * حذف التكرار داخل البرومبت
- */
 const uniqueLines = (text) => {
   const seen = new Set();
   return text
@@ -32,163 +18,124 @@ const uniqueLines = (text) => {
     .join("\n");
 };
 
-/**
- * تحويل السياق إلى “حالة تشغيل”
- */
-function buildOperatingState(ctx) {
-  return {
-    mode: ctx.isTechnical ? "ENGINEERING" : "GENERAL",
-    level: ctx.level || "normal",
-    repetition: ctx.isRepeating || false,
-    strict: true
-  };
-}
-
-/**
- * بناء نواة التفكير
- */
-function buildCore(state) {
+// ================= SIRAJ CORE IDENTITY =================
+function buildSirajIdentity() {
   return `
-[SYSTEM CORE]
+[SIRAJ IDENTITY]
 
-You are SIRAJ AI, a deterministic reasoning engine.
+You are SIRAJ, an Islamic life coach focused on real-life guidance.
 
-RULES (non-negotiable):
-- No filler text.
-- No repetition of ideas.
-- No generic explanations.
-- No hallucinated facts.
-- If uncertain: say "UNKNOWN".
+Mission:
+- Help the user improve their daily life
+- Give practical, actionable advice
+- Use Islamic values naturally (not preachy)
 
-REASONING FLOW (mandatory):
-1. Interpret intent.
-2. Extract key constraints.
-3. Produce minimal valid solution.
+Strict rules:
+- No fatwas
+- No judging
+- No long lectures
+- No vague advice
+- If unsure in religion: say consult a scholar
 
-OUTPUT STYLE:
-- Direct.
-- Structured.
-- Minimal but complete.
+Response format (MANDATORY):
+
+1. One short sentence showing you understand the user's situation
+
+2. Two steps ONLY:
+Step 1: very clear action
+Step 2: very clear action
+
+3. One short motivational line
+
+4. Optional: one short Islamic reminder (max 1 line)
+
+Hard constraints:
+- No repetition
+- No long paragraphs
+- No explanations
+- No multiple ideas per step
+- Keep it tight and direct
+
+Tone:
+- Human
+- Calm
+- Direct
 `;
 }
 
-/**
- * وضع الهندسة
- */
-function buildEngineeringMode(state) {
-  if (state.mode !== "ENGINEERING") return "";
-
-  return `
-[ENGINEERING MODE]
-
-- Diagnose before answering.
-- Prefer root cause over description.
-- Provide actionable fix only.
-- Avoid theory unless requested.
-`;
-}
-
-/**
- * مستوى المستخدم
- */
-function buildLevel(state) {
-  if (state.level === "beginner") {
-    return `
-[SIMPLIFIED MODE]
-- Short sentences.
-- No complex terms.
-`;
-  }
-
-  if (state.level === "advanced") {
-    return `
-[ADVANCED MODE]
-- Deep analysis allowed.
-- Multi-solution if relevant.
-`;
-  }
-
-  return "";
-}
-
-/**
- * منع التكرار
- */
-function buildRepetitionGuard(state) {
-  if (!state.repetition) return "";
-
-  return `
-[ANTI-REPETITION]
-- Change approach completely.
-- Do not reuse previous phrasing.
-`;
-}
-
-/**
- * الذاكرة (تحويلها إلى إشارة لا نص)
- */
-function buildMemory(memory) {
-  if (!memory.topics?.size) return "";
-
-  return `
-[MEMORY SIGNAL]
-topics=${Array.from(memory.topics).join(",")}
-style=${memory.userStyle || "neutral"}
-`;
-}
-
-function buildUserMemoryBlock(memory) {
+// ================= USER CONTEXT =================
+function buildUserContext(memory) {
   if (!memory) return "";
 
   return `
-[USER MEMORY]
-facts: ${(memory.facts || []).join(", ")}
-preferences: ${JSON.stringify(memory.preferences || {})}
-profile: ${JSON.stringify(memory.profile || {})}
+[USER CONTEXT]
+
+Goals:
+${(memory.goals || []).slice(-2).join(", ")}
+
+Struggles:
+${(memory.struggles || []).slice(-2).join(", ")}
+
+Habits:
+${(memory.habits || []).slice(-2).join(", ")}
+
+Last state:
+${memory.lastState || ""}
 `;
 }
 
-/**
- * عقد الإخراج النهائي (مهم جداً)
- */
+// ================= OUTPUT CONTROL =================
 function buildOutputContract() {
   return `
-[OUTPUT CONTRACT]
-- No introductions.
-- No closing phrases.
-- One idea per line.
-- Answer first, explain only if necessary.
+[OUTPUT RULES]
+
+- Follow the format strictly
+- Keep response under 120 words
+- Use simple Arabic
+- No bullet spam
+- No generic advice
 `;
 }
 
-/**
- * بناء البرومبت النهائي
- */
+// ================= SYSTEM PROMPT =================
 export function buildSystemPrompt(messages, userId, userMemory) {
   const ctx = analyzeContext(messages);
   const memory = extractMemory(messages);
   const personality = getPersonality();
-  const state = buildOperatingState(ctx);
 
-  let prompt = [
-    buildCore(state),
-    buildEngineeringMode(state),
-    buildLevel(state),
-    buildRepetitionGuard(state),
-    buildMemory(memory),
-    buildUserMemoryBlock(userMemory), 
-    buildOutputContract(),
-    personality
-  ]
-    .filter(Boolean)
-    .map(clean)
-    .join("\n\n");
+  const state = {
+    isTech: ctx.isTechnical,
+    level: ctx.level,
+    intent: memory.intent || "general",
+    topics: Array.from(memory.topics || [])
+  };
 
-  prompt = uniqueLines(prompt);
-  prompt = bilingualFix(prompt);
+  let prompt = `
+[SIRAJ CORE STATE]
+
+mode: ${state.isTech ? "TECH" : "NORMAL"}
+level: ${state.level}
+intent: ${state.intent}
+topics: ${state.topics.join(", ")}
+
+[USER MEMORY]
+goals: ${(userMemory?.goals || []).slice(-2).join(", ")}
+struggles: ${(userMemory?.struggles || []).slice(-2).join(", ")}
+habits: ${(userMemory?.habits || []).slice(-2).join(", ")}
+
+[PERSONALITY]
+${personality}
+
+RULES:
+- Be consistent with state
+- If TECH → give steps
+- If NORMAL → coaching style
+- Always 2 steps only
+- Always short
+`;
 
   return {
     role: "system",
-    content: prompt
+    content: clean(prompt)
   };
 }

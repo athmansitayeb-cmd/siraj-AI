@@ -7,7 +7,10 @@ export const sendEmail = async ({ to, subject, htmlContent }) => {
   const url = "https://api.brevo.com/v3/smtp/email";
 
   const body = {
-    sender: { name: "SIRAJ", email: process.env.SMTP_USER },
+    sender: { 
+      name: process.env.BREVO_SENDER_NAME,
+      email: process.env.BREVO_SENDER_EMAIL
+    },
     to: [{ email: to }],
     subject,
     htmlContent

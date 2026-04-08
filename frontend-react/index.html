@@ -4,17 +4,32 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend-react</title>
+    <title>SIRAJ</title>
 
-    <!-- تعريف آمن لدالة _ لتجنب أي Error من مكتبات خارجية -->
+    <!-- تعريف آمن لتفادي أخطاء مكتبات خارجية -->
     <script>
-      window._ = window._ || function(e, t){ return ""; };
+      window._ = window._ || function (e, t) { return ""; };
+    </script>
+
+    <!-- Google Analytics 4 -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-M9KS4H5377"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+
+      gtag('js', new Date());
+
+      gtag('config', 'G-M9KS4H5377', {
+        send_page_view: true
+      });
+
+      gtag('event', 'page_view');
     </script>
   </head>
+
   <body>
     <div id="root"></div>
-    
-    <!-- تحميل React و Vite main -->
+
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

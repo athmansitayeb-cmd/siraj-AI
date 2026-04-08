@@ -62,14 +62,23 @@ useEffect(() => {
     });
   });
 
-  socket.on("message-error", (e) => {
-    console.error("SERVER ERROR:", e);
+socket.on("message-error", (e) => {
+  if (e.msg === "LIMIT_REACHED") {
     setMessages((prev) => [
       ...prev,
-      { role: "assistant", content: "⚠️ ERROR" }
+      {
+        role: "assistant",
+        content: "🚫 انتهى الاستخدام المجاني\n🔓 فعّل Pro لمواصلة"
+      }
     ]);
-  });
+    return;
+  }
 
+  setMessages((prev) => [
+    ...prev,
+    { role: "assistant", content: "⚠️ ERROR" }
+  ]);
+});
   // LOAD HISTORY
   fetch("https://siraj.software/api/conversation/main-chat", {
     headers: {

@@ -1,29 +1,59 @@
 export function extractMemory(messages) {
   const last = messages.slice(-20);
 
-  let memory = {
+  const memory = {
     topics: new Set(),
+    intent: "general",
     userStyle: "normal"
   };
 
   const text = last.map(m => m.content).join(" ").toLowerCase();
 
-  // topics
-  if (text.includes("react")) memory.topics.add("react");
-  if (text.includes("server")) memory.topics.add("backend");
-  if (text.includes("ai")) memory.topics.add("ai");
+  // ================= TOPICS =================
+  const topicMap = {
+    react: "frontend",
+    vue: "frontend",
+    angular: "frontend",
 
-if (text.includes("api") || text.includes("endpoint")) memory.topics.add("backend");
-if (text.includes("database") || text.includes("mongo")) memory.topics.add("database");
-if (text.includes("jwt") || text.includes("auth")) memory.topics.add("security");
+    server: "backend",
+    api: "backend",
+    endpoint: "backend",
 
-  // user style
-  if (text.match(/اشرح|ماهو|لماذا/)) {
-    memory.userStyle = "needs_explanation";
+    database: "database",
+    mongo: "database",
+
+    jwt: "security",
+    auth: "security",
+
+    ai: "ai"
+  };
+
+  for (const key in topicMap) {
+    if (text.includes(key)) {
+      memory.topics.add(topicMap[key]);
+    }
   }
 
-  if (text.match(/fix|error|bug/)) {
+  // ================= INTENT (الأهم فقط) =================
+  if (/(error|bug|fix|مشكلة|fail|crash)/.test(text)) {
+    memory.intent = "problem_solving";
+  } 
+  else if (/(اشرح|ماهو|لماذا|كيف يعمل)/.test(text)) {
+    memory.intent = "learning";
+  } 
+  else if (/(ابدأ|خطة|build|setup|how to start)/.test(text)) {
+    memory.intent = "guidance";
+  }
+
+  // ================= STYLE (تبسيط القرار) =================
+  if (memory.intent === "problem_solving") {
     memory.userStyle = "problem_solver";
+  } 
+  else if (memory.intent === "learning") {
+    memory.userStyle = "needs_explanation";
+  } 
+  else {
+    memory.userStyle = "normal";
   }
 
   return memory;

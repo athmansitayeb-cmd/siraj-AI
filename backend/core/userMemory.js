@@ -7,9 +7,10 @@ export async function getUserMemory(userId) {
   if (!doc) {
     doc = await UserMemory.create({
       userId,
-      facts: [],
-      preferences: {},
-      profile: {}
+      goals: [],
+      struggles: [],
+      habits: [],
+      lastState: ""
     });
   }
 
@@ -31,20 +32,46 @@ export async function updateUserMemory(userId, extracted) {
     });
   }
 
-  memory.facts = [...new Set([
-    ...memory.facts,
-    ...(extracted.facts || [])
-  ])];
+  // ✅ LIMIT FACTS (مهم جداً)
+// ================= GOALS =================
+if (extracted.goals?.length) {
+  memory.goals = [...new Set([
+    ...memory.goals,
+    ...extracted.goals
+  ])].slice(-10);
+}
 
-  memory.preferences = {
-    ...memory.preferences,
-    ...(extracted.preferences || {})
-  };
+// ================= STRUGGLES =================
+if (extracted.struggles?.length) {
+  memory.struggles = [...new Set([
+    ...memory.struggles,
+    ...extracted.struggles
+  ])].slice(-10);
+}
 
-  memory.profile = {
-    ...memory.profile,
-    ...(extracted.profile || {})
-  };
+// ================= HABITS =================
+if (extracted.habits?.length) {
+  memory.habits = [...new Set([
+    ...memory.habits,
+    ...extracted.habits
+  ])].slice(-10);
+}
+
+// ================= STATE =================
+if (extracted.lastState) {
+  memory.lastState = extracted.lastState;
+}
+
+  // ⛔️ قص JSON لو كبر
+  const prefStr = JSON.stringify(memory.preferences);
+  if (prefStr.length > 500) {
+    memory.preferences = {};
+  }
+
+  const profileStr = JSON.stringify(memory.profile);
+  if (profileStr.length > 500) {
+    memory.profile = {};
+  }
 
   memory.updatedAt = new Date();
 

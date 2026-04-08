@@ -1,14 +1,13 @@
-import 'dotenv/config';
+import dotenv from "dotenv";
+dotenv.config();
+console.log("ENV CHECK:", process.env.GROQ_API_KEY ? "OK" : "MISSING");
 import mongoose from "mongoose";
 import connectDB from "./config/db.js";
 import { orchestrate } from "./core/orchestrator.js";
+import User from "./models/User.js";
 import authRouter from "./routes/auth.js";
 import conversationRouter from "./routes/conversation.js";
-import { updateUserMemory } from "./core/userMemory.js";
 import { runtimeGate } from "./core/runtime.js";
-import { buildSystemPrompt } from "./core/brain.js";
-import { sendEmail } from "./services/emailService.js";
-import User from "./models/User.js";
 import express from "express";
 import http from "http";
 import cors from "cors";
@@ -24,7 +23,6 @@ import { Server } from "socket.io";
 import { createClient } from "redis";
 import Conversation from "./models/Conversation.js";
 import { safeConversationId, pushUnique } from "./patch_core.js";
-import crypto from "crypto";
 import summarizeRouter from "./routes/summarize.js";
 import emailRouter from "./routes/email.js";
 
@@ -95,19 +93,26 @@ const io = new Server(server, {
 });
 
 // ================= SOCKET AUTH =================
-io.use((socket, next) => {
+io.use(async (socket, next) => {
   try {
     const token = socket.handshake.auth?.token;
     if (!token) return next(new Error("unauthorized"));
 
-    socket.user = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    const user = await User.findById(decoded.id);
+    if (!user) return next(new Error("unauthorized"));
+
+    socket.user = {
+      id: user._id.toString(),
+      plan: user.plan
+    };
+
     next();
-  } catch {
+  } catch (err) {
     next(new Error("unauthorized"));
   }
 });
-
-// ================= GROQ =================
 
 // ================= SOCKET CHAT =================
 io.on("connection", (socket) => {
@@ -117,6 +122,19 @@ io.on("connection", (socket) => {
     try {
       const cid = safeConversationId(conversationId);
       if (!cid || !msg) return;
+
+console.log("REQ", {
+  user: socket.user.id,
+  msgLength: msg.length
+});
+
+// ================= MESSAGE SIZE LIMIT =================
+      if (msg.length > 1000) {
+        socket.emit("message-error", {
+          msg: "MESSAGE_TOO_LONG"
+        });
+        return;
+      }
 
       let convo = await Conversation.findOne({
         userId: socket.user.id,
@@ -133,8 +151,6 @@ io.on("connection", (socket) => {
 
       pushUnique(convo.messages, { role: "user", content: msg });
 
-      await updateUserMemory(socket.user.id, msg);
-
 const lastMsgKey = `last:${socket.user.id}`;
 const last = await redis.get(lastMsgKey);
 
@@ -147,9 +163,32 @@ const count = await redis.incr(rateKey);
 
 if (count === 1) await redis.expire(rateKey, 60);
 
-if (count > 25) {
+// 20 request / minute max
+if (count > 20) {
   socket.emit("message-error", {
     msg: "RATE_LIMIT_AI"
+  });
+  return;
+}
+
+// ================= DAILY LIMIT =================
+const dailyKey = `daily:${socket.user.id}`;
+const daily = await redis.incr(dailyKey);
+
+if (daily === 1) {
+  await redis.expire(dailyKey, 86400); // 24h
+}
+
+let limit = 200;
+
+if (socket.user.plan === "pro") {
+  limit = 2000;
+}
+
+if (daily > limit) {
+  socket.emit("message-error", {
+    msg: "LIMIT_REACHED",
+    plan: socket.user.plan
   });
   return;
 }

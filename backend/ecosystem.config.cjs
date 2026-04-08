@@ -5,7 +5,7 @@ module.exports = {
       script: "server.js",
       cwd: "/opt/siraj/backend",
       interpreter: "node",
-      env_file: ".env",
+      env_file: "/opt/siraj/backend/.env", // ← مسار كامل
       env: {
         NODE_ENV: "production"
       }

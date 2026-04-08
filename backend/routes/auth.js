@@ -24,7 +24,15 @@ router.post("/register", async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    res.json({ token, user });
+res.json({
+  token,
+  user: {
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    plan: user.plan
+  }
+});
   } catch (e) {
     res.status(500).json({ error: "register failed" });
   }
@@ -67,28 +75,29 @@ router.post("/forgot-password", async (req, res) => {
     const { email } = req.body;
 
     const user = await User.findOne({ email });
+
+    // always same response (security)
     if (!user) {
-      return res.status(404).json({ error: "user not found" });
+      return res.json({
+        message: "If email exists, reset instructions sent"
+      });
     }
 
-    // token reset
     const resetToken = crypto.randomBytes(32).toString("hex");
 
-    // hash token for DB safety
     const hashedToken = crypto
       .createHash("sha256")
       .update(resetToken)
       .digest("hex");
 
-    // save to user
     user.resetPasswordToken = hashedToken;
     user.resetPasswordExpires = new Date(Date.now() + 30 * 60 * 1000);
     await user.save();
 
-    const resetLink = `https://siraj.software/reset-password/${resetToken}?email=${email}`;
+    const resetLink = `https://siraj.software/reset-password/${resetToken}?email=${user.email}`;
 
     await sendEmail({
-      to: email,
+      to: user.email,
       subject: "Reset your SIRAJ password",
       htmlContent: `
         <h2>Password Reset</h2>
@@ -98,11 +107,13 @@ router.post("/forgot-password", async (req, res) => {
       `
     });
 
-    res.json({ message: "reset email sent" });
+    return res.json({
+      message: "If email exists, reset instructions sent"
+    });
 
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: "forgot password failed" });
+    return res.status(500).json({ error: "forgot password failed" });
   }
 });
 
@@ -128,6 +139,8 @@ router.post("/reset-password", async (req, res) => {
     user.password = newPassword;
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
+
+    user.markModified("password");
 
     await user.save();
 

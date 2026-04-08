@@ -67,4 +67,40 @@ router.get("/:id", requireAuth, async (req, res) => {
   }
 });
 
+// ================== POST CHAT MESSAGE ==================
+router.post("/", requireAuth, async (req, res) => {
+  try {
+    const { message, conversationId = "main-chat" } = req.body;
+
+    if (!message) return res.status(400).json({ error: "Message missing" });
+
+    let convo = await Conversation.findOne({
+      userId: req.user.id,
+      conversationId
+    });
+
+    if (!convo) {
+      convo = await Conversation.create({
+        userId: req.user.id,
+        conversationId,
+        messages: []
+      });
+    }
+
+    convo.messages.push({ role: "user", content: message });
+    convo.messages = convo.messages.slice(-50); // حفظ آخر 50 رسالة
+    await convo.save();
+
+    res.json({
+      ok: true,
+      conversationId: convo.conversationId,
+      messages: convo.messages
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 export default router;

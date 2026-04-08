@@ -2,9 +2,12 @@ import mongoose from "mongoose";
 
 const userMemorySchema = new mongoose.Schema({
   userId: { type: String, required: true, unique: true },
-  facts: [String],
-  preferences: Object,
-  profile: Object,
+
+  goals: { type: [String], default: [] },
+  struggles: { type: [String], default: [] },
+  habits: { type: [String], default: [] },
+  lastState: { type: String, default: "" },
+
   updatedAt: Date
 });
 
