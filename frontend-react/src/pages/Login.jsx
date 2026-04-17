@@ -2,84 +2,130 @@ import MainLayout from "../layout/MainLayout";
 import { useForm } from "react-hook-form";
 import { motion } from "framer-motion";
 import { useNavigate, Link } from "react-router-dom";
+import { useState } from "react";
 import api from "../services/api";
 import toast from "react-hot-toast";
 import handleApiError from "../utils/handleApiError";
 
 export default function Login() {
   const navigate = useNavigate();
+  const { register, handleSubmit, formState: { errors } } = useForm();
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm();
+  const [loading, setLoading] = useState(false);
+  const [showPass, setShowPass] = useState(false);
 
   const onSubmit = async (data) => {
     try {
-      const res = await api.post("/auth/login", data);
+      setLoading(true);
 
+      const res = await api.post("/auth/login", data);
       localStorage.setItem("siraj_token", res.data.token);
 
       toast.success("Welcome back");
-
       navigate("/dashboard", { replace: true });
 
     } catch (err) {
       toast.error(handleApiError(err));
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <MainLayout>
-      <div className="flex justify-center items-center py-20">
-        <motion.div
-          className="bg-black/90 p-10 rounded-3xl shadow-2xl w-full max-w-md border-2 border-yellow-400 backdrop-blur-sm"
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.7 }}
-        >
-          <h1 className="text-4xl font-extrabold text-yellow-400 mb-6 text-center">
-            Login
-          </h1>
+      <div className="min-h-screen flex bg-black text-white relative overflow-hidden">
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            <input
-              type="email"
-              placeholder="Email"
-              {...register("email", { required: true })}
-              className="w-full p-4 rounded-xl border border-yellow-400 bg-black text-yellow-400"
-            />
-            {errors.email && (
-              <p className="text-red-500 text-sm">Email is required</p>
-            )}
+        {/* LEFT */}
+        <div className="hidden md:flex flex-col justify-center w-1/2 px-16 relative">
 
-            <input
-              type="password"
-              placeholder="Password"
-              {...register("password", { required: true })}
-              className="w-full p-4 rounded-xl border border-yellow-400 bg-black text-yellow-400"
-            />
-            {errors.password && (
-              <p className="text-red-500 text-sm">Password is required</p>
-            )}
+          <div className="absolute w-[600px] h-[600px] bg-yellow-400/10 blur-[160px] rounded-full top-[-200px] left-[-200px] animate-pulse" />
+          <div className="absolute w-[500px] h-[500px] bg-blue-500/10 blur-[160px] rounded-full bottom-[-200px] right-[-200px] animate-pulse" />
 
-            <button
-              type="submit"
-              className="w-full py-3 rounded-xl bg-yellow-400 text-black font-bold"
-            >
-              Sign In
-            </button>
-          </form>
+          <motion.h1
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-6xl font-extrabold leading-tight tracking-tight"
+          >
+            SIRAJ
+          </motion.h1>
 
-          <p className="mt-5 text-center text-yellow-300">
-            <Link to="/forgot-password">Reset password</Link>
+          <p className="mt-6 text-lg text-gray-400 max-w-md">
+            Intelligence that guides you when you're lost.
+            <br />
+            <span className="text-yellow-400">Not answers — direction.</span>
           </p>
 
-          <p className="mt-2 text-center text-yellow-300">
-            <Link to="/register">Create account</Link>
-          </p>
-        </motion.div>
+        </div>
+
+        {/* RIGHT */}
+        <div className="flex flex-1 items-center justify-center p-6">
+
+          <motion.div
+            className="w-full max-w-md bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl p-10 shadow-2xl relative"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+          >
+
+            <div className="absolute inset-0 rounded-3xl border border-yellow-400/20 pointer-events-none" />
+
+            <h2 className="text-3xl font-bold text-center mb-6">
+              Welcome Back
+            </h2>
+
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+
+              <input
+                type="email"
+                placeholder="Email"
+                {...register("email", { required: true })}
+                className="w-full p-4 rounded-xl bg-black/40 border border-white/10 focus:border-yellow-400 outline-none"
+              />
+              {errors.email && <p className="text-red-400 text-xs">Required</p>}
+
+              <div className="relative">
+
+                <input
+                  type={showPass ? "text" : "password"}
+                  placeholder="Password"
+                  {...register("password", { required: true })}
+                  className="w-full p-4 rounded-xl bg-black/40 border border-white/10 focus:border-yellow-400 outline-none pr-12"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setShowPass(!showPass)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-yellow-400"
+                >
+                  {showPass ? "🙈" : "👁️"}
+                </button>
+
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 rounded-xl bg-yellow-400 text-black font-bold disabled:opacity-50"
+              >
+                {loading ? "Loading..." : "Sign In"}
+              </button>
+
+            </form>
+
+            <div className="mt-5 text-center text-sm text-gray-400">
+              <Link to="/forgot-password" className="hover:text-yellow-400">
+                Forgot password?
+              </Link>
+            </div>
+
+            <div className="mt-2 text-center text-sm text-gray-400">
+              New here?{" "}
+              <Link to="/register" className="text-yellow-400 hover:underline">
+                Create account
+              </Link>
+            </div>
+
+          </motion.div>
+        </div>
       </div>
     </MainLayout>
   );
