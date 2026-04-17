@@ -1,5 +1,5 @@
-import { fetchAI } from "./ai.js";
 import client from "./sanityClient.js";
+import { orchestrate } from "../core/orchestrator.js";
 
 export async function summarizeConversation(conversationId) {
   const query = `*[_type == "message" && conversation._ref == $conversationId] | order(_createdAt asc) {
@@ -8,10 +8,29 @@ export async function summarizeConversation(conversationId) {
   }`;
 
   const messages = await client.fetch(query, { conversationId });
-  if (!messages.length) return "⚠️ لا توجد رسائل لتلخيصها";
 
-  const text = messages.map(m => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`).join("\n");
+  if (!messages.length) {
+    return "⚠️ لا توجد رسائل لتلخيصها";
+  }
 
-  const prompt = `قم بتلخيص هذه المحادثة في نقاط رئيسية قصيرة مع الاحتفاظ بالمعنى:\n\n${text}`;
-  return await fetchAI(prompt);
+  const text = messages
+    .map(m => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
+    .join("\n");
+
+  const prompt =
+    "قم بتلخيص هذه المحادثة في نقاط رئيسية قصيرة مع الاحتفاظ بالمعنى:\n\n" +
+    text;
+
+  const result = await orchestrate({
+    convo: messages,
+    msg: prompt,
+    userId: "summarizer",
+    redis: null
+  });
+
+  if (!result.ok) {
+    return "⚠️ فشل في التلخيص";
+  }
+
+  return result.text;
 }

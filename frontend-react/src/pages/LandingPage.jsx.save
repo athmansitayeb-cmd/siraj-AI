@@ -16,7 +16,7 @@ export default function LandingPage() {
       >
         سِراج
         <br />
-        <span className="text-white">نورٌ يوقظك… لتعود إلى الله عن بصيرة</span>
+        <span className="text-white">نور يهديك حين تتيه</span>
       </motion.h1>
 
       {/* Subtitle */}
@@ -26,10 +26,10 @@ export default function LandingPage() {
         animate={{ opacity: 1 }}
         transition={{ delay: 0.3 }}
       >
-        ليس تطبيقًا عاديًا…  
-        بل مرآة تكشف حقيقتك،  
-        وتذكير يعيدك حين تغفل،  
-        وصوت يضعك أمام نفسك… بلا تزييف.
+        ليس أداة.
+بل رفيق يذكّرك حين تغفل،
+ويُعيدك حين تبتعد،
+ويضعك أمام نفسك… بلا تزييف.
       </motion.p>
 
       {/* Value props */}
@@ -39,9 +39,9 @@ export default function LandingPage() {
         animate={{ opacity: 1 }}
         transition={{ delay: 0.5 }}
       >
-        <span>⏳ يوقظك حين تغفل</span>
-        <span>⚖️ يجعلك تواجه نفسك</span>
-        <span>📖 طريقه واضح أساسه القرآن</span>
+        <span>🧭 يوجهك عند التشتت</span>
+        <span>🧠 يفهم حالتك النفسية</span>
+        <spaك</span>
       </motion.div>
 
       {/* CTA */}
@@ -53,20 +53,20 @@ export default function LandingPage() {
       >
         <Link to="/login">
           <button className="px-6 py-3 bg-yellow-400 text-black rounded-xl font-bold hover:scale-105 transition">
-            تسجيل الدخول
+            ادخل إلى سِراج
           </button>
         </Link>
 
         <Link to="/register">
           <button className="px-6 py-3 border border-yellow-400 text-yellow-400 rounded-xl font-bold hover:bg-yellow-400 hover:text-black transition">
-            إنشاء حساب
+            ابدأ الآن
           </button>
         </Link>
       </motion.div>
 
       {/* Footer */}
       <p className="absolute bottom-6 text-xs text-gray-500">
-        سِراج · نظام يوقظك لتعود
+        SIRAJ · guidance system v1
       </p>
     </div>
   );

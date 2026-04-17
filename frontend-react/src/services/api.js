@@ -28,4 +28,6 @@ api.interceptors.response.use(
   }
 );
 
+export const getMe = () => api.get("/me");
+
 export default api;

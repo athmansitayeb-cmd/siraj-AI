@@ -1,0 +1,151 @@
+import MainLayout from "../layout/MainLayout";
+import { motion } from "framer-motion";
+import { Canvas } from "@react-three/fiber";
+import { OrbitControls, Sphere, MeshDistortMaterial } from "@react-three/drei";
+import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { getMe } from "../services/api";
+
+export default function Dashboard() {
+
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getMe()
+      .then(res => {
+        setUser(res.data);
+      })
+      .catch(() => {
+        setUser(null);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, []);
+
+  const isLogged = !!user;
+  const isPro = user?.plan === "pro";
+
+const upgrade = async () => {
+  try {
+    const token = localStorage.getItem("siraj_token");
+
+    const res = await fetch("https://siraj.software/paypal/create-order", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + token
+      }
+    });
+
+    const data = await res.json();
+
+    const approveLink = data.links?.find(l => l.rel === "approve");
+
+    if (approveLink?.href) {
+      window.location.href = approveLink.href;
+    } else {
+      console.error("No approve link", data);
+    }
+
+  } catch (e) {
+    console.error("Upgrade error", e);
+  }
+};
+
+  return (
+    <MainLayout>
+      <div className="relative h-[90vh] flex flex-col items-center justify-center overflow-hidden bg-black text-yellow-400">
+
+        {/* Background 3D */}
+        <Canvas className="absolute inset-0 z-0">
+          <ambientLight intensity={0.5} />
+          <directionalLight position={[5, 5, 5]} intensity={1} />
+          <Sphere args={[1.5, 32, 32]} scale={2}>
+            <MeshDistortMaterial
+              color="#facc15"
+              attach="material"
+              distort={0.6}
+              speed={2}
+            />
+          </Sphere>
+          <OrbitControls enableZoom={false} autoRotate autoRotateSpeed={0.5} />
+        </Canvas>
+
+        {/* Main content */}
+        <motion.div
+          className="z-10 text-center"
+          initial={{ opacity: 0, y: -50 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 1.5 }}
+        >
+          <h1 className="text-7xl font-extrabold">SIRAJ ULTRA AI</h1>
+
+          <p className="text-gray-300 text-lg mt-4">
+            Next Generation Artificial Intelligence System
+          </p>
+
+          <p className="text-yellow-300 mt-6 text-md italic">
+            Build faster. Think deeper. Let AI amplify your intelligence.
+          </p>
+
+          {/* ================= USER STATE ================= */}
+          {!loading && isLogged && (
+            <div className="mt-8 flex flex-col items-center gap-4">
+
+              {isPro ? (
+                <div className="text-green-400 font-bold text-lg">
+                  ✅ Pro Activated
+                </div>
+              ) : (
+                <>
+                  <div className="text-red-400">
+                    🚫 Free Plan (Limits Active)
+                  </div>
+
+                  <button
+                    onClick={upgrade}
+                    className="px-6 py-3 bg-yellow-400 text-black rounded-xl font-bold hover:scale-105 transition"
+                  >
+                    Upgrade to Pro
+                  </button>
+                </>
+              )}
+
+              {/* usage */}
+              <div className="text-gray-400 text-sm">
+                Usage: {user?.usage?.toFixed(4) || 0}$
+              </div>
+
+            </div>
+          )}
+
+          {/* ================= GUEST ================= */}
+          {!loading && !isLogged && (
+            <motion.div
+              className="flex gap-6 mt-10 justify-center"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 1.5, delay: 0.3 }}
+            >
+              <Link to="/login">
+                <button className="px-6 py-3 bg-yellow-400 text-black rounded-xl font-bold hover:scale-105 transition">
+                  Login
+                </button>
+              </Link>
+
+              <Link to="/register">
+                <button className="px-6 py-3 border border-yellow-400 text-yellow-400 rounded-xl font-bold hover:bg-yellow-400 hover:text-black transition">
+                  Create Account
+                </button>
+              </Link>
+            </motion.div>
+          )}
+
+        </motion.div>
+
+      </div>
+    </MainLayout>
+  );
+}

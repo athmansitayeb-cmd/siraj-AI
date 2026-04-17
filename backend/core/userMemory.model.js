@@ -8,6 +8,9 @@ const userMemorySchema = new mongoose.Schema({
   habits: { type: [String], default: [] },
   lastState: { type: String, default: "" },
 
+  checkins: { type: [String], default: [] },
+  lastCheckAt: { type: Date, default: null },
+
   updatedAt: Date
 });
 

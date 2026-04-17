@@ -4,6 +4,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import ProtectedRoute from "./routes/ProtectedRoute";
 
 // pages
+const Upgrade = lazy(() => import("./pages/Upgrade.jsx"));
 const Chat = lazy(() => import("./pages/Chat.jsx"));
 const Dashboard = lazy(() => import("./pages/Dashboard.jsx"));
 const Login = lazy(() => import("./pages/Login.jsx"));
@@ -64,6 +65,15 @@ export default function App() {
               <Dashboard />
             </ProtectedRoute>
           }
+        />
+
+        <Route
+          path="/upgrade"
+          element={
+            <ProtectedRoute>
+              <Upgrade />
+            </ProtectedRoute>
+          } 
         />
 
       </Routes>

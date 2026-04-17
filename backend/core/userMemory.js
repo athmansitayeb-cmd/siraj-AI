@@ -31,6 +31,11 @@ export async function updateUserMemory(userId, extracted) {
       profile: {}
     });
   }
+// ================= CHECKINS =================
+if (extracted.checkin) {
+  memory.checkins = [...memory.checkins, extracted.checkin].slice(-10);
+  memory.lastCheckAt = new Date();
+}
 
   // ✅ LIMIT FACTS (مهم جداً)
 // ================= GOALS =================

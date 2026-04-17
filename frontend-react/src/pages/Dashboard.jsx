@@ -1,76 +1,121 @@
 import MainLayout from "../layout/MainLayout";
 import { motion } from "framer-motion";
-import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Sphere, MeshDistortMaterial } from "@react-three/drei";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import api from "../services/api";
 
 export default function Dashboard() {
+  const [user, setUser] = useState(null);
+  const [daily, setDaily] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const token = !!localStorage.getItem("siraj_token");
+  // ================= LOAD USER =================
+  const loadUser = () => {
+    api.get("/dashboard")
+      .then(res => setUser(res.data.user))
+      .catch(() => setUser(null))
+      .finally(() => setLoading(false));
+  };
+
+  // ================= LOAD DAILY VERSE =================
+  const loadDaily = () => {
+    fetch("https://siraj.software/api/daily-verse")
+      .then(r => r.json())
+      .then(setDaily)
+      .catch(() => setDaily(null));
+  };
+
+  useEffect(() => {
+    loadUser();
+    loadDaily();
+  }, []);
 
   return (
     <MainLayout>
-      <div className="relative h-[90vh] flex flex-col items-center justify-center overflow-hidden bg-black text-yellow-400">
+      <div className="min-h-[90vh] flex flex-col items-center justify-center bg-black text-yellow-400 px-4">
 
-        {/* Background 3D */}
-        <Canvas className="absolute inset-0 z-0">
-          <ambientLight intensity={0.5} />
-          <directionalLight position={[5, 5, 5]} intensity={1} />
-          <Sphere args={[1.5, 32, 32]} scale={2}>
-            <MeshDistortMaterial
-              color="#facc15"
-              attach="material"
-              distort={0.6}
-              speed={2}
-            />
-          </Sphere>
-          <OrbitControls enableZoom={false} autoRotate autoRotateSpeed={0.5} />
-        </Canvas>
-
-        {/* Main content */}
+        {/* ================= TITLE ================= */}
         <motion.div
-          className="z-10 text-center"
-          initial={{ opacity: 0, y: -50 }}
+          className="text-center mb-10"
+          initial={{ opacity: 0, y: -40 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 1.5 }}
         >
-          <h1 className="text-7xl font-extrabold">SIRAJ ULTRA AI</h1>
+          <h1 className="text-4xl md:text-5xl font-extrabold">
+            سِراج
+          </h1>
 
-          <p className="text-gray-300 text-lg mt-4">
-            Next Generation Artificial Intelligence System
+          <p className="text-gray-400 mt-2">
+            لست هنا لتضييع الوقت…
           </p>
+        </motion.div>
 
-          {/* 🔥 عبارة تحفيزية */}
-          <p className="text-yellow-300 mt-6 text-md italic">
-            Build faster. Think deeper. Let AI amplify your intelligence.
-          </p>
+        {/* ================= DAILY VERSE ================= */}
+        {daily && (
+          <motion.div
+            className="max-w-xl w-full bg-black/60 border border-yellow-400 rounded-2xl p-6 text-center shadow-xl"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+          >
+            <div className="text-gray-400 text-sm mb-2">
+              آية اليوم
+            </div>
 
-          {/* 🔥 زرار يظهر فقط إذا ما كاش token */}
-          {!token && (
-            <motion.div
-              className="flex gap-6 mt-10 justify-center"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 1.5, delay: 0.3 }}
-            >
+            <div className="text-xl font-bold leading-loose text-yellow-300">
+              {daily.verse}
+            </div>
 
-              {/* 🔥 زر تسجيل الدخول */}
-              <Link to="/login">
-                <button className="px-6 py-3 bg-yellow-400 text-black rounded-xl font-bold hover:scale-105 transition">
-                  Login
-                </button>
-              </Link>
+            <div className="mt-4 text-gray-300 leading-relaxed">
+              {daily.tafsir}
+            </div>
 
-              {/* 🔥 زر إنشاء حساب */}
-              <Link to="/register">
-                <button className="px-6 py-3 border border-yellow-400 text-yellow-400 rounded-xl font-bold hover:bg-yellow-400 hover:text-black transition">
-                  Create Account
-                </button>
-              </Link>
+            <div className="mt-6 text-yellow-400 font-bold text-lg">
+              {daily.message}
+            </div>
+          </motion.div>
+        )}
 
-            </motion.div>
-          )}
+{user?.plan !== "pro" && (
+  <div className="mt-6 text-sm text-gray-500 leading-loose border-t border-white/10 pt-4">
+    هذا التوجيه لك اليوم فقط…  
+    لكنك بدون متابعة، ستعود لنفس الدائرة.
 
+    <br /><br />
+
+    <a href="/upgrade" className="text-yellow-400 underline">
+      فعّل المتابعة المستمرة
+    </a>
+  </div>
+)}
+
+        {/* ================= USER STATE ================= */}
+        {!loading && user && (
+          <motion.div
+            className="mt-10 text-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+          >
+            <div className="text-gray-400 text-sm">
+              حالتك الآن
+            </div>
+
+            <div className="mt-2 text-white">
+              {user.plan === "pro"
+          ? "في طريق ثابت 👍"
+          : "ما زلت تحاول… بدون نظام واضح"}
+            </div>
+          </motion.div>
+        )}
+
+        {/* ================= ACTION ================= */}
+        <motion.div
+          className="mt-12 flex gap-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          <a href="/chat">
+            <button className="px-6 py-3 bg-yellow-400 text-black rounded-xl font-bold hover:scale-105 transition">
+              ادخل إلى سِراج
+            </button>
+          </a>
         </motion.div>
 
       </div>

@@ -16,18 +16,48 @@ export async function extractUserMemory(msg) {
 
   // ================= GOALS =================
   if (/اريد|هدفي|اتمنى/.test(text)) {
-    data.goals.push(msg);
+    data.goals.push(msg.slice(0, 120));
   }
 
   // ================= STRUGGLES =================
   if (/اعاني|مشكل|تعبان|ضايع|قلق|خايف/.test(text)) {
-    data.struggles.push(msg);
+    data.struggles.push(msg.slice(0, 120));
     data.lastState = msg;
   }
 
+// ================= STATE DETECTION =================
+if (/ضايع|ماعرف|مشتت/.test(text)) {
+  data.lastState = "lost";
+}
+
+if (/خايف|قلق|متوتر/.test(text)) {
+  data.lastState = "anxious";
+}
+
+if (/كسول|مافي طاقة|تعبان/.test(text)) {
+  data.lastState = "low_energy";
+}
+
+if (/اريد التغيير|سأبدأ|سألتزم/.test(text)) {
+  data.lastState = "motivated";
+}
+
+if (/لماذا يحدث لي|الحياة صعبة/.test(text)) {
+  data.lastState = "victim_mode";
+}
+
+// ================= CHECKINS =================
+if (/التزمت|صليت|بدأت|نفذت/.test(text)) {
+  data.checkin = "progress";
+}
+
+if (/لم التزم|فشلت|ماقدرت/.test(text)) {
+  data.checkin = "failed";
+}
+
   // ================= HABITS =================
   if (/بدأت|التزمت|صليت|تركت/.test(text)) {
-    data.habits.push(msg);
+    data.habits.push(msg.slice(0, 120));
   }
 
   if (

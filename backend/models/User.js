@@ -11,6 +11,16 @@ const UserSchema = new mongoose.Schema(
           type: String,
           default: "free"
         },
+    paypalSubscriptionId: {
+      type: String,
+      default: null
+    },
+
+    subscriptionStatus: {
+      type: String,
+      default: "none" // none | active | cancelled | expired
+    },
+
     resetPasswordToken: { type: String },
     resetPasswordExpires: { type: Date }
   },
