@@ -1,0 +1,52 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+
+  <defs>
+    <!-- Glow effect -->
+    <radialGradient id="glow" cx="50%" cy="45%" r="60%">
+      <stop offset="0%" stop-color="#FFD54A" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#FFD54A" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="softGlow">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" fill="#05070F"/>
+
+  <!-- Ambient glow -->
+  <circle cx="256" cy="240" r="150" fill="url(#glow)" opacity="0.4"/>
+
+  <!-- Flame (SIRAJ core light) -->
+  <path d="M256 110
+           C290 160, 310 210, 256 260
+           C202 210, 222 160, 256 110 Z"
+        fill="#FFD54A"
+        filter="url(#softGlow)"/>
+
+  <!-- Inner light core -->
+  <circle cx="256" cy="255" r="10" fill="#FFE9A3" filter="url(#softGlow)"/>
+
+  <!-- Base anchor -->
+  <circle cx="256" cy="330" r="14"
+          fill="none"
+          stroke="#FFD54A"
+          stroke-width="2"
+          opacity="0.5"/>
+
+  <!-- Text -->
+  <text x="256" y="465"
+        text-anchor="middle"
+        fill="#FFE9A3"
+        font-size="46"
+        font-family="Arial"
+        letter-spacing="8">
+    SIRAJ
+  </text>
+
+</svg>

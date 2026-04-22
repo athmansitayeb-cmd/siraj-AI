@@ -40,3 +40,23 @@
 .read-the-docs {
   color: #888;
 }
+
+.siraj-glow {
+  animation: sirajPulse 2.5s ease-in-out infinite;
+  filter: drop-shadow(0 0 10px #FFD54A);
+}
+
+@keyframes sirajPulse {
+  0% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 8px #FFD54A);
+  }
+  50% {
+    transform: scale(1.05);
+    filter: drop-shadow(0 0 18px #FFD54A);
+  }
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 8px #FFD54A);
+  }
+}
