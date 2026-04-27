@@ -10,6 +10,10 @@ const Login = lazy(() => import("./pages/Login.jsx"));
 const Register = lazy(() => import("./pages/Register.jsx"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword.jsx"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword.jsx"));
+const Pricing = lazy(() => import("./pages/Pricing.jsx"));
+const Docs = lazy(() => import("./pages/Docs.jsx"));
+const AI = lazy(() => import("./pages/AI.jsx"));
+const Platform = lazy(() => import("./pages/Platform.jsx"));
 
 // 👇 صفحات جديدة (مهمة للـ SEO)
 const About = lazy(() => import("./pages/About.jsx"));
@@ -34,6 +38,11 @@ export default function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/about" element={<About />} />
         <Route path="/features" element={<Features />} />
+
+<Route path="/pricing" element={<Pricing />} />
+<Route path="/docs" element={<Docs />} />
+<Route path="/ai" element={<AI />} />
+<Route path="/platform" element={<Platform />} />
 
         {/* auth */}
         <Route path="/login" element={token ? <Navigate to="/dashboard" /> : <Login />} />

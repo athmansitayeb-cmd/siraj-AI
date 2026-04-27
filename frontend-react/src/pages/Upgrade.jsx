@@ -1,35 +1,33 @@
 import MainLayout from "../layout/MainLayout";
-import { motion } from "framer-motion";
 import { useState } from "react";
+import { motion } from "framer-motion";
 
 export default function Upgrade() {
   const [loading, setLoading] = useState(false);
 
-  const upgrade = async (plan = "pro_monthly") => {
+  const upgrade = async (plan) => {
     try {
       setLoading(true);
 
       const token = localStorage.getItem("siraj_token");
 
-      const res = await fetch("https://siraj.software/api/paypal/subscription/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + token
-        },
-        body: JSON.stringify({ plan })
-      });
+      const res = await fetch(
+        "https://siraj.software/api/paypal/subscription/create",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + token
+          },
+          body: JSON.stringify({ plan })
+        }
+      );
 
       const data = await res.json();
 
       if (data.approveLink) {
         window.location.href = data.approveLink;
-      } else {
-        console.error(data);
       }
-
-    } catch (e) {
-      console.error(e);
     } finally {
       setLoading(false);
     }
@@ -37,92 +35,81 @@ export default function Upgrade() {
 
   return (
     <MainLayout>
-      <div className="min-h-[90vh] flex flex-col items-center justify-center bg-black text-yellow-400 px-4">
+      <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center px-6">
 
-        {/* ================= TITLE ================= */}
+        {/* TITLE */}
         <motion.div
-          className="text-center mb-10 max-w-xl"
-          initial={{ opacity: 0, y: -40 }}
+          className="text-center max-w-xl"
+          initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
         >
-          <h1 className="text-4xl md:text-5xl font-extrabold">
-            هل تريد أن تبقى كما أنت؟
+          <h1 className="text-4xl font-bold text-yellow-400">
+            Upgrade to PRO
           </h1>
 
-          <p className="text-gray-400 mt-4 leading-loose">
-            سِراج في الوضع المجاني يعطيك التذكير…  
-            لكن بدون متابعة، بدون عمق، وبدون التزام حقيقي.
+          <p className="mt-4 text-gray-400">
+            Unlock continuous guidance, memory, and deeper contextual understanding.
           </p>
         </motion.div>
 
-        {/* ================= COMPARISON ================= */}
+        {/* CARDS */}
         <motion.div
-          className="grid md:grid-cols-2 gap-6 max-w-3xl w-full"
+          className="mt-10 grid md:grid-cols-2 gap-6 max-w-3xl w-full"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
         >
 
           {/* FREE */}
-          <div className="border border-gray-700 rounded-2xl p-6 text-center">
-            <h2 className="text-xl mb-4 text-gray-400">الخطة المجانية</h2>
+          <div className="border border-white/10 rounded-2xl p-6">
+            <h2 className="text-gray-400 mb-4">Free Plan</h2>
 
-            <ul className="space-y-3 text-sm text-gray-400">
-              <li>⚠️ استخدام محدود</li>
-              <li>⚠️ بدون ذاكرة متقدمة</li>
-              <li>⚠️ بدون متابعة حقيقية</li>
-              <li>⚠️ نتائج سطحية</li>
+            <ul className="text-sm text-gray-500 space-y-2">
+              <li>Basic chat access</li>
+              <li>Limited context memory</li>
+              <li>No long-term tracking</li>
             </ul>
           </div>
 
           {/* PRO */}
-          <div className="border-2 border-yellow-400 rounded-2xl p-6 text-center bg-yellow-400/5">
-            <h2 className="text-xl mb-4 text-yellow-300 font-bold">سِراج PRO</h2>
+          <div className="border border-yellow-400 rounded-2xl p-6 bg-yellow-400/5">
+            <h2 className="text-yellow-400 mb-4 font-bold">PRO Plan</h2>
 
-            <ul className="space-y-3 text-sm text-yellow-200">
-              <li>✔️ متابعة مستمرة لك</li>
-              <li>✔️ ذاكرة تفهمك وتتطور معك</li>
-              <li>✔️ توجيه أعمق حسب حالتك</li>
-              <li>✔️ تجربة حقيقية وليست سطحية</li>
+            <ul className="text-sm text-yellow-200 space-y-2">
+              <li>Persistent memory</li>
+              <li>Adaptive guidance system</li>
+              <li>Deeper contextual reasoning</li>
             </ul>
           </div>
 
         </motion.div>
 
-        {/* ================= CTA ================= */}
+        {/* CTA */}
         <motion.div
-          className="mt-10 flex flex-col md:flex-row gap-4"
+          className="mt-10 flex gap-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
         >
-
           <button
             onClick={() => upgrade("pro_monthly")}
             disabled={loading}
-            className="px-6 py-3 bg-yellow-400 text-black rounded-xl font-bold hover:scale-105 transition"
+            className="px-6 py-3 bg-yellow-400 text-black rounded-xl font-bold"
           >
-            اشتراك شهري — $5
+            Monthly $5
           </button>
 
           <button
             onClick={() => upgrade("pro_yearly")}
             disabled={loading}
-            className="px-6 py-3 border border-yellow-400 rounded-xl font-bold hover:bg-yellow-400 hover:text-black transition"
+            className="px-6 py-3 border border-yellow-400 text-yellow-400 rounded-xl"
           >
-            اشتراك سنوي — $40
+            Yearly $40
           </button>
-
         </motion.div>
 
-        {/* ================= PSYCHOLOGICAL HOOK ================= */}
-        <motion.div
-          className="mt-10 text-center text-gray-500 text-sm max-w-md leading-loose"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-        >
-          القرار ليس في السعر…  
-          القرار: هل ستبقى تدور في نفس المكان…  
-          أم تبدأ فعلاً؟
-        </motion.div>
+        {/* SOFT NOTE */}
+        <p className="mt-10 text-xs text-gray-600 text-center max-w-md">
+          PRO is designed for users who want structured guidance and continuity, not just isolated answers.
+        </p>
 
       </div>
     </MainLayout>

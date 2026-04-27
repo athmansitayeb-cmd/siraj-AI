@@ -18,6 +18,7 @@ export default function Register() {
     try {
       setLoading(true);
       await api.post("/auth/register", data);
+      trackEvent("signup");
 
       toast.success("Account created");
       navigate("/login");

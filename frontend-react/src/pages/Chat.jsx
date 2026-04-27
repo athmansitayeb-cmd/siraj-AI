@@ -4,26 +4,6 @@ import MainLayout from "../layout/MainLayout";
 import { motion, AnimatePresence } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 
-/* ================= Arabic numbers ================= */
-const arabicNumbers = {
-  0: "٠", 1: "١", 2: "٢", 3: "٣", 4: "٤",
-  5: "٥", 6: "٦", 7: "٧", 8: "٨", 9: "٩",
-};
-
-const toArabic = (t = "") =>
-  t.replace(/\d/g, d => arabicNumbers[d]);
-
-const detectMood = (text = "") => {
-  const t = text.toLowerCase();
-  if (t.includes("ضايع") || t.includes("قلق") || t.includes("مش عارف")) return "lost";
-  if (t.includes("ابدأ") || t.includes("هدف") || t.includes("خطة")) return "seeking";
-  return "normal";
-};
-
-function Cursor() {
-  return <span className="inline-block w-2 h-4 bg-yellow-400 ml-1 animate-pulse" />;
-}
-
 export default function Chat() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -31,42 +11,21 @@ export default function Chat() {
 
   const socketRef = useRef(null);
   const bottomRef = useRef(null);
-  const loadedRef = useRef(false);
 
   const conversationId = "main-chat";
 
-  /* ================= INIT ================= */
   useEffect(() => {
     const token = localStorage.getItem("siraj_token");
     if (!token) return;
 
-    /* ========== LOAD HISTORY (ONCE) ========== */
-    const loadHistory = async () => {
-      try {
-        const res = await fetch(
-          "https://siraj.software/api/conversation/main-chat",
-          {
-            headers: { Authorization: "Bearer " + token }
-          }
-        );
+    fetch("https://siraj.software/api/conversation/main-chat", {
+      headers: { Authorization: "Bearer " + token }
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data?.messages)) setMessages(data.messages);
+      });
 
-        if (!res.ok) return;
-
-        const data = await res.json();
-
-        if (Array.isArray(data?.messages)) {
-          setMessages(data.messages);
-        }
-
-        loadedRef.current = true;
-      } catch (e) {
-        console.error("history error", e);
-      }
-    };
-
-    loadHistory();
-
-    /* ========== SOCKET ========== */
     const socket = io("https://siraj.software", {
       path: "/socket.io",
       transports: ["websocket"],
@@ -93,30 +52,21 @@ export default function Chat() {
       });
     });
 
-    socket.on("message-error", (e) => {
+    socket.on("message-error", () => {
       setTyping(false);
-
       setMessages(prev => [
         ...prev,
-        {
-          role: "assistant",
-          content:
-            e.msg === "LIMIT_REACHED"
-              ? "🚫 انتهى الحد المجاني — قم بالترقية"
-              : "⚠️ خطأ في النظام"
-        }
+        { role: "assistant", content: "⚠️ System error occurred." }
       ]);
     });
 
     return () => socket.disconnect();
   }, []);
 
-  /* ================= AUTO SCROLL ================= */
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, typing]);
 
-  /* ================= SEND ================= */
   const sendMessage = () => {
     if (!input.trim()) return;
 
@@ -141,69 +91,74 @@ export default function Chat() {
       <div className="h-[90vh] flex flex-col bg-black text-white">
 
         {/* HEADER */}
-        <div className="px-6 py-4 border-b border-white/10">
-          <div className="text-yellow-400 font-bold">SIRAJ AI</div>
+        <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center">
+          <div className="text-yellow-400 font-bold tracking-wide">
+            SIRAJ AI
+          </div>
+          <div className="text-xs text-gray-500">
+            Active Session
+          </div>
         </div>
 
-        {/* CHAT */}
-        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+        {/* CHAT AREA */}
+        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
 
           <AnimatePresence>
-            {messages.map((m, i) => {
-              const mood = detectMood(m.content);
-
-              return (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+            {messages.map((m, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+              >
+                <div
+                  className={`
+                    max-w-[70%] px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-md
+                    ${m.role === "user"
+                      ? "bg-yellow-400 text-black rounded-br-md"
+                      : "bg-white/5 border border-white/10 text-gray-200 rounded-bl-md"
+                    }
+                  `}
                 >
-                  <div className={`max-w-[75%] px-4 py-3 rounded-2xl ${
-                    m.role === "user"
-                      ? "bg-yellow-400 text-black"
-                      : "bg-white/5 border border-white/10"
-                  }`}>
+                  <ReactMarkdown>
+                    {m.content || ""}
+                  </ReactMarkdown>
 
-                    <ReactMarkdown>
-                      {toArabic(m.content)}
-                    </ReactMarkdown>
-
-                    {m.role === "assistant" && i === messages.length - 1 && typing && (
-                      <Cursor />
-                    )}
-
-                    {m.role === "assistant" && i === messages.length - 1 && mood === "lost" && (
-                      <div className="mt-2 text-xs text-red-400">
-                        سراج: ركّز، المشكلة ليست في الطريق.
-                      </div>
-                    )}
-
-                  </div>
-                </motion.div>
-              );
-            })}
+                  {m.role === "assistant" && i === messages.length - 1 && typing && (
+                    <span className="inline-flex mt-2 gap-1">
+                      <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-bounce" />
+                      <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-bounce delay-75" />
+                      <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-bounce delay-150" />
+                    </span>
+                  )}
+                </div>
+              </motion.div>
+            ))}
           </AnimatePresence>
 
           <div ref={bottomRef} />
         </div>
 
-        {/* INPUT */}
-        <div className="p-4 border-t border-white/10 flex gap-3">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-            className="flex-1 px-4 py-3 bg-white/5 rounded-xl"
-            placeholder="اكتب رسالتك..."
-          />
+        {/* INPUT BAR */}
+        <div className="p-4 border-t border-white/10">
+          <div className="flex gap-3 items-center bg-white/5 rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-yellow-400">
 
-          <button
-            onClick={sendMessage}
-            className="px-6 bg-yellow-400 text-black rounded-xl"
-          >
-            إرسال
-          </button>
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+              className="flex-1 bg-transparent outline-none text-sm"
+              placeholder="Type your message..."
+            />
+
+            <button
+              onClick={sendMessage}
+              className="px-5 py-2 bg-yellow-400 text-black rounded-lg font-semibold hover:scale-105 transition"
+            >
+              Send
+            </button>
+
+          </div>
         </div>
 
       </div>

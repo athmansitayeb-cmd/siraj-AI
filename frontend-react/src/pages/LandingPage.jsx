@@ -1,101 +1,134 @@
+import { Helmet } from "react-helmet-async";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 
 export default function LandingPage() {
   return (
-    <div className="h-screen w-full bg-black text-yellow-400 relative overflow-hidden flex items-center justify-center px-6">
-
-      {/* Soft ambient background (very subtle) */}
-      <motion.div
-        className="absolute w-[700px] h-[700px] bg-yellow-500/10 blur-[160px] rounded-full"
-        animate={{ scale: [1, 1.05, 1] }}
-        transition={{ duration: 10, repeat: Infinity }}
-      />
-
-      {/* LOGO = PRIMARY FOCUS (only moving element) */}
-      <motion.div
-        className="absolute flex items-center justify-center pointer-events-none select-none"
-        initial={{ opacity: 0 }}
-        animate={{
-          opacity: [0.08, 0.14, 0.08],
-        }}
-        transition={{ duration: 6, repeat: Infinity }}
-      >
-        <img
-          src="/logo.svg"
-          alt="SIRAJ"
-          className="w-[520px] h-[520px] siraj-core"
+    <>
+      <Helmet>
+        <title>SIRAJ AI - Intelligent Automation Platform</title>
+        <meta
+          name="description"
+          content="SIRAJ AI is a next-generation automation and intelligence platform for building smart workflows and AI-driven systems."
         />
-      </motion.div>
+      </Helmet>
 
-      {/* CONTENT */}
-      <div className="relative z-10 text-center flex flex-col items-center max-w-3xl">
+      <div className="relative min-h-screen bg-black text-white overflow-hidden">
 
-        {/* Title */}
-        <motion.h1
-          className="text-5xl md:text-7xl font-bold leading-tight"
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-        >
-          <span className="text-yellow-400">سِراج</span>
-          <br />
-          <span className="text-white text-2xl md:text-3xl font-light">
-            نورٌ يوقظك… لتعود إلى الله عن بصيرة
-          </span>
-        </motion.h1>
+        {/* Background glow */}
+        <div className="absolute inset-0">
+          <div className="absolute w-[600px] h-[600px] bg-yellow-400/10 blur-[160px] rounded-full top-[-200px] left-[-200px]" />
+          <div className="absolute w-[500px] h-[500px] bg-blue-500/10 blur-[180px] rounded-full bottom-[-200px] right-[-200px]" />
+        </div>
 
-        {/* Description */}
-        <motion.p
-          className="text-gray-300 mt-6 leading-loose text-sm md:text-base"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-        >
-          ليس تطبيقًا عاديًا…  
-          بل مرآة تكشف حقيقتك،  
-          وتذكير يعيدك حين تغفل،  
-          وصوت يضعك أمام نفسك بلا تزييف.
-        </motion.p>
+        {/* NAV */}
+        <header className="relative z-10 flex justify-between items-center px-8 py-6 border-b border-white/10">
+          <div className="text-yellow-400 font-bold text-xl tracking-wide">
+            SIRAJ
+          </div>
 
-        {/* Features */}
-        <motion.div
-          className="flex flex-col md:flex-row gap-6 mt-8 text-sm text-yellow-200"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-        >
-          <span>⏳ يوقظك حين تغفل</span>
-          <span>⚖️ يجعلك تواجه نفسك</span>
-          <span>📖 طريقه واضح أساسه القرآن</span>
-        </motion.div>
+          <nav className="hidden md:flex gap-6 text-sm text-gray-400">
+            <Link to="/features" className="hover:text-white">Features</Link>
+            <Link to="/pricing" className="hover:text-white">Pricing</Link>
+            <Link to="/docs" className="hover:text-white">Docs</Link>
+          </nav>
 
-        {/* CTA */}
-        <motion.div
-          className="flex gap-4 mt-10"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.7 }}
-        >
-          <Link to="/login">
-            <button className="px-7 py-3 bg-yellow-400 text-black rounded-xl font-semibold hover:scale-105 transition">
-              تسجيل الدخول
-            </button>
+          <Link
+            to="/login"
+            className="px-4 py-2 bg-white text-black rounded-lg font-semibold hover:scale-105 transition"
+          >
+            Launch App
           </Link>
+        </header>
 
-          <Link to="/register">
-            <button className="px-7 py-3 border border-yellow-400 text-yellow-400 rounded-xl font-semibold hover:bg-yellow-400 hover:text-black transition">
-              إنشاء حساب
-            </button>
-          </Link>
-        </motion.div>
+        {/* HERO */}
+        <main className="relative z-10 flex flex-col items-center justify-center text-center px-6 pt-24">
 
-        {/* Footer */}
-        <p className="absolute bottom-6 text-xs text-gray-500">
-          سِراج · نظام يوقظك لتعود
-        </p>
+          <motion.h1
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="text-5xl md:text-7xl font-bold leading-tight max-w-4xl"
+          >
+            Build intelligent systems with{" "}
+            <span className="text-yellow-400">SIRAJ AI</span>
+          </motion.h1>
+
+          <p className="mt-6 text-gray-400 max-w-2xl text-lg">
+            A modern AI automation platform designed to think, execute, and scale workflows intelligently across your applications.
+          </p>
+
+          {/* CTA */}
+          <div className="mt-10 flex gap-4">
+            <Link
+              to="/register"
+              className="px-6 py-3 bg-yellow-400 text-black font-semibold rounded-xl hover:scale-105 transition"
+            >
+              Start Free
+            </Link>
+
+            <Link
+              to="/features"
+              className="px-6 py-3 border border-white/20 rounded-xl hover:bg-white/10 transition"
+            >
+              View Features
+            </Link>
+          </div>
+
+          {/* TRUST LINE */}
+          <p className="mt-8 text-xs text-gray-600">
+            Trusted by developers building AI workflows & automation systems
+          </p>
+
+          {/* DEMO BOX */}
+          <div className="mt-16 w-full max-w-4xl">
+            <div className="border border-white/10 rounded-2xl p-6 bg-white/5 backdrop-blur">
+
+              <div className="text-left text-sm text-gray-400 mb-3">
+                Live AI Preview
+              </div>
+
+              <div className="h-40 flex items-center justify-center text-gray-500 text-sm">
+                AI Demo Interface (Coming Soon)
+              </div>
+
+            </div>
+          </div>
+
+          {/* FEATURES GRID */}
+          <div className="mt-20 grid md:grid-cols-3 gap-6 max-w-5xl w-full">
+
+            <div className="border border-white/10 p-6 rounded-xl bg-white/5">
+              <h3 className="text-white font-semibold mb-2">AI Automation</h3>
+              <p className="text-gray-400 text-sm">
+                Automate workflows and reduce manual operations using intelligent agents.
+              </p>
+            </div>
+
+            <div className="border border-white/10 p-6 rounded-xl bg-white/5">
+              <h3 className="text-white font-semibold mb-2">Smart Reasoning</h3>
+              <p className="text-gray-400 text-sm">
+                Context-aware AI that understands user intent and adapts dynamically.
+              </p>
+            </div>
+
+            <div className="border border-white/10 p-6 rounded-xl bg-white/5">
+              <h3 className="text-white font-semibold mb-2">API Ready</h3>
+              <p className="text-gray-400 text-sm">
+                Easily integrate SIRAJ into your apps, dashboards, and backend systems.
+              </p>
+            </div>
+
+          </div>
+
+        </main>
+
+        {/* FOOTER */}
+        <footer className="relative z-10 mt-24 text-center text-xs text-gray-600 py-8 border-t border-white/10">
+          © {new Date().getFullYear()} SIRAJ AI — Built for intelligent automation
+        </footer>
 
       </div>
-    </div>
+    </>
   );
 }

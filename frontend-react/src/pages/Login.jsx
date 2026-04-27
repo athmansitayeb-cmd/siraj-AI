@@ -20,6 +20,7 @@ export default function Login() {
 
       const res = await api.post("/auth/login", data);
       localStorage.setItem("siraj_token", res.data.token);
+      trackEvent("login");
 
       toast.success("Welcome back");
       navigate("/dashboard", { replace: true });

@@ -1,8 +1,27 @@
 export default function About() {
   return (
-    <div>
-      <h1>About SIRAJ</h1>
-      <p>AI platform for intelligent automation and assistants.</p>
-    </div>
+    <main className="p-10 text-white max-w-3xl">
+
+      <h1>About SIRAJ AI Platform</h1>
+
+      <p>
+        SIRAJ is an advanced artificial intelligence platform designed to
+        assist users in automation, communication, and intelligent decision-making.
+      </p>
+
+      <h2>Our Mission</h2>
+      <p>
+        To build a smart AI system that helps users interact, learn, and automate
+        tasks efficiently using modern machine learning technologies.
+      </p>
+
+      <h2>What SIRAJ Does</h2>
+      <ul>
+        <li>AI-powered conversational assistant</li>
+        <li>Workflow automation tools</li>
+        <li>Real-time data interaction</li>
+      </ul>
+
+    </main>
   );
 }

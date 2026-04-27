@@ -1,12 +1,26 @@
 export default function Features() {
   return (
-    <div>
-      <h1>Features</h1>
+    <main className="p-10 text-white max-w-3xl">
+
+      <h1>Features of SIRAJ AI</h1>
+
+      <p>
+        SIRAJ provides a set of intelligent tools designed to enhance productivity
+        and automate complex workflows.
+      </p>
+
+      <h2>Core Features</h2>
       <ul>
-        <li>AI Chat</li>
-        <li>Automation</li>
-        <li>Dashboard Analytics</li>
+        <li><strong>AI Chat Assistant:</strong> Smart conversational system</li>
+        <li><strong>Automation Engine:</strong> Execute tasks automatically</li>
+        <li><strong>Analytics Dashboard:</strong> Monitor usage and insights</li>
       </ul>
-    </div>
+
+      <h2>Built for Developers</h2>
+      <p>
+        SIRAJ is designed to integrate easily with APIs and modern web applications.
+      </p>
+
+    </main>
   );
 }
