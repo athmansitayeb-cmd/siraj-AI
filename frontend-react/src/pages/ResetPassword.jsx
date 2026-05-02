@@ -1,4 +1,3 @@
-import MainLayout from "../layout/MainLayout";
 import { useForm } from "react-hook-form";
 import { motion } from "framer-motion";
 import api from "../services/api";
@@ -30,7 +29,6 @@ export default function ResetPassword() {
   };
 
   return (
-    <MainLayout>
       <div className="flex justify-center items-center py-20">
         <motion.div
           className="bg-black p-10 rounded-3xl shadow-2xl w-full max-w-md border border-yellow-400"
@@ -60,6 +58,5 @@ export default function ResetPassword() {
           </form>
         </motion.div>
       </div>
-    </MainLayout>
   );
 }

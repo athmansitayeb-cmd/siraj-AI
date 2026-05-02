@@ -1,4 +1,6 @@
 import UserMemory from "./userMemory.model.js";
+import { applyMemoryDecay } from "./memoryDecay.js";
+import { contextualForgetting } from "./contextualForgetting.js";
 
 // ================= GET =================
 export async function getUserMemory(userId) {
@@ -26,11 +28,20 @@ export async function updateUserMemory(userId, extracted) {
   if (!memory) {
     memory = await UserMemory.create({
       userId,
-      facts: [],
-      preferences: {},
-      profile: {}
+      goals: [],
+      struggles: [],
+      habits: [],
+      lastState: ""
     });
   }
+memory.updatedAt = new Date();
+
+// سجل الحالة التاريخية (مهم جداً للتطور)
+memory.stateHistory = memory.stateHistory || [];
+if (extracted.lastState) {
+  memory.stateHistory.push(extracted.lastState);
+  memory.stateHistory = memory.stateHistory.slice(-20);
+}
 // ================= CHECKINS =================
 if (extracted.checkin) {
   memory.checkins = [...memory.checkins, extracted.checkin].slice(-10);
@@ -80,5 +91,10 @@ if (extracted.lastState) {
 
   memory.updatedAt = new Date();
 
+  memory = contextualForgetting(memory, extracted?.lastState || "");
+
+  memory = applyMemoryDecay(memory);
+
   await memory.save();
-}
+
+  }

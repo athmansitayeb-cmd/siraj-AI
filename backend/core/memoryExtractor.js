@@ -3,70 +3,78 @@ import Groq from "groq-sdk";
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 export async function extractUserMemory(msg) {
-  if (!msg) return null;
+  if (!msg || msg.length < 20) return null;
 
-  const data = {
-    goals: [],
-    struggles: [],
-    habits: [],
-    lastState: ""
-  };
+  try {
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      temperature: 0.2,
+      max_tokens: 250,
+      messages: [
+        {
+          role: "system",
+          content: `
+You are a strict memory extractor.
 
-  const text = msg.toLowerCase();
+Return ONLY valid JSON. No markdown. No explanations.
 
-  // ================= GOALS =================
-  if (/اريد|هدفي|اتمنى/.test(text)) {
-    data.goals.push(msg.slice(0, 120));
-  }
-
-  // ================= STRUGGLES =================
-  if (/اعاني|مشكل|تعبان|ضايع|قلق|خايف/.test(text)) {
-    data.struggles.push(msg.slice(0, 120));
-    data.lastState = msg;
-  }
-
-// ================= STATE DETECTION =================
-if (/ضايع|ماعرف|مشتت/.test(text)) {
-  data.lastState = "lost";
+Schema:
+{
+  "goals": [],
+  "struggles": [],
+  "habits": [],
+  "lastState": "",
+  "checkin": ""
 }
 
-if (/خايف|قلق|متوتر/.test(text)) {
-  data.lastState = "anxious";
-}
+Rules:
+- goals: long-term user intentions
+- struggles: blockers / problems
+- habits: repeated behaviors
+- lastState: one of [lost, anxious, low_energy, motivated, victim_mode]
+- checkin: progress | failed | ""
 
-if (/كسول|مافي طاقة|تعبان/.test(text)) {
-  data.lastState = "low_energy";
-}
+If nothing is found, return empty arrays and empty strings.
+`
+        },
+        {
+          role: "user",
+          content: msg
+        }
+      ]
+    });
 
-if (/اريد التغيير|سأبدأ|سألتزم/.test(text)) {
-  data.lastState = "motivated";
-}
+    let text = completion?.choices?.[0]?.message?.content || "";
 
-if (/لماذا يحدث لي|الحياة صعبة/.test(text)) {
-  data.lastState = "victim_mode";
-}
+    // ================= CLEAN OUTPUT =================
+    text = text
+      .replace(/```json/g, "")
+      .replace(/```/g, "")
+      .trim();
 
-// ================= CHECKINS =================
-if (/التزمت|صليت|بدأت|نفذت/.test(text)) {
-  data.checkin = "progress";
-}
+    if (!text) return null;
 
-if (/لم التزم|فشلت|ماقدرت/.test(text)) {
-  data.checkin = "failed";
-}
+    let parsed;
 
-  // ================= HABITS =================
-  if (/بدأت|التزمت|صليت|تركت/.test(text)) {
-    data.habits.push(msg.slice(0, 120));
-  }
+    try {
+      parsed = JSON.parse(text);
+    } catch (e) {
+      console.error("[MEMORY PARSE FAIL RAW]", text);
+      return null;
+    }
 
-  if (
-    !data.goals.length &&
-    !data.struggles.length &&
-    !data.habits.length
-  ) {
+    if (!parsed || typeof parsed !== "object") return null;
+
+    return {
+      goals: Array.isArray(parsed.goals) ? parsed.goals : [],
+      struggles: Array.isArray(parsed.struggles) ? parsed.struggles : [],
+      habits: Array.isArray(parsed.habits) ? parsed.habits : [],
+      lastState: typeof parsed.lastState === "string" ? parsed.lastState : "",
+      checkin: typeof parsed.checkin === "string" ? parsed.checkin : ""
+    };
+
+  } catch (e) {
+    console.error("[MEMORY EXTRACT FAIL]", e);
     return null;
   }
-
-  return data;
 }

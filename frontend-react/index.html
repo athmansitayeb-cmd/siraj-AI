@@ -2,49 +2,71 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SIRAJ</title>
-    <meta name="description" content="SIRAJ AI - intelligent assistant platform for automation and workflows" />
+
+    <!-- 🔴 TITLE (مهم جدًا للـ CTR) -->
+    <title>SIRAJ AI – Build Autonomous AI Agents & Workflow Automation Platform</title>
+
+    <!-- 🔴 DESCRIPTION (مُحسّنة للبحث) -->
+    <meta name="description" content="SIRAJ AI is a next-generation platform to build autonomous AI agents, automate workflows, and deploy intelligent systems for business productivity and automation." />
+
+    <!-- 🔴 SEO BASICS -->
     <meta name="robots" content="index, follow" />
     <meta name="theme-color" content="#000000" />
-   
-    <!-- تعريف آمن لتفادي أخطاء مكتبات خارجية -->
-    <script>
-      window._ = window._ || function (e, t) { return ""; };
+    <meta name="language" content="en" />
+
+    <!-- 🔴 KEYWORDS (ثانوي لكن مفيد للـ context) -->
+    <meta name="keywords" content="AI agents, automation platform, workflow automation, AI assistant, SIRAJ AI, business automation, intelligent workflows, AI tools" />
+
+    <!-- 🔴 OPEN GRAPH (Facebook / LinkedIn / WhatsApp) -->
+    <meta property="og:title" content="SIRAJ AI – AI Agents & Workflow Automation Platform" />
+    <meta property="og:description" content="Build autonomous AI agents and automate workflows with SIRAJ AI." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://siraj.software/" />
+
+    <!-- 🔴 TWITTER CARD -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="SIRAJ AI – Automation Platform" />
+    <meta name="twitter:description" content="Build AI agents and automate workflows with SIRAJ AI." />
+
+    <!-- 🔴 STRUCTURED DATA (مهم جدًا) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "SIRAJ AI",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web",
+      "url": "https://siraj.software",
+      "description": "AI platform for building autonomous agents, automating workflows, and improving business productivity.",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      }
+    }
     </script>
 
-    <!-- Google Analytics 4 -->
+    <!-- 🔴 SAFETY SCRIPT -->
+    <script>
+      window._ = window._ || function () { return ""; };
+    </script>
+
+    <!-- 🔴 GOOGLE ANALYTICS -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-M9KS4H5377"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
-
       gtag('js', new Date());
-
-      gtag('config', 'G-M9KS4H5377', {
-        send_page_view: true
-      });
-
+      gtag('config', 'G-M9KS4H5377', { send_page_view: true });
     </script>
 
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "SoftwareApplication",
-  "name": "SIRAJ AI",
-  "applicationCategory": "AI Assistant",
-  "operatingSystem": "Web",
-  "description": "AI assistant platform for automation and intelligent workflows."
-}
-</script>
-
-    <link rel="canonical" href="https://siraj.software/" />
   </head>
 
   <body>
     <div id="root"></div>
-
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

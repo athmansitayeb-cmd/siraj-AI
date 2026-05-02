@@ -1,4 +1,3 @@
-import MainLayout from "../layout/MainLayout";
 import { useForm } from "react-hook-form";
 import { motion } from "framer-motion";
 import { useNavigate, Link } from "react-router-dom";
@@ -30,7 +29,6 @@ export default function Register() {
   };
 
   return (
-    <MainLayout>
       <div className="min-h-screen flex bg-black text-white relative overflow-hidden">
 
         {/* LEFT SIDE (branding) */}
@@ -156,6 +154,5 @@ export default function Register() {
           </motion.div>
         </div>
       </div>
-    </MainLayout>
   );
 }

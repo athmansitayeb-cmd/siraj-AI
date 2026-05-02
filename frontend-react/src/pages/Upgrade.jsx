@@ -1,4 +1,3 @@
-import MainLayout from "../layout/MainLayout";
 import { useState } from "react";
 import { motion } from "framer-motion";
 
@@ -34,7 +33,6 @@ export default function Upgrade() {
   };
 
   return (
-    <MainLayout>
       <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center px-6">
 
         {/* TITLE */}
@@ -112,6 +110,5 @@ export default function Upgrade() {
         </p>
 
       </div>
-    </MainLayout>
   );
 }

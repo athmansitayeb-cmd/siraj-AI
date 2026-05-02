@@ -4,11 +4,13 @@ export default function Pricing() {
   return (
     <>
       <Helmet>
-        <title>Pricing - SIRAJ AI Assistant Platform</title>
+        <title>SIRAJ AI Pricing – Plans for Automation & AI Workflows</title>
         <meta
           name="description"
-          content="Flexible pricing plans for SIRAJ AI platform for automation, productivity, and intelligent workflows."
+          content="Flexible pricing plans for SIRAJ AI platform. Start free and scale your AI automation workflows."
         />
+        <meta name="robots" content="index, follow" />
+        <link rel="canonical" href="https://siraj.software/pricing" />
       </Helmet>
 
       <main className="p-10 text-white max-w-3xl">

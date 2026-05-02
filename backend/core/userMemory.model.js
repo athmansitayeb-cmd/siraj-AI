@@ -9,9 +9,14 @@ const userMemorySchema = new mongoose.Schema({
   lastState: { type: String, default: "" },
 
   checkins: { type: [String], default: [] },
-  lastCheckAt: { type: Date, default: null },
 
-  updatedAt: Date
+  stateHistory: { type: [String], default: [] },
+
+  lastCheckAt: { type: Date, default: null },
+  updatedAt: { type: Date, default: Date.now },
+
+  // 🔥 NEW
+  lastActiveAt: { type: Date, default: Date.now }
 });
 
 export default mongoose.model("UserMemory", userMemorySchema);

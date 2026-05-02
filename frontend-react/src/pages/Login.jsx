@@ -1,4 +1,3 @@
-import MainLayout from "../layout/MainLayout";
 import { useForm } from "react-hook-form";
 import { motion } from "framer-motion";
 import { useNavigate, Link } from "react-router-dom";
@@ -6,6 +5,7 @@ import { useState } from "react";
 import api from "../services/api";
 import toast from "react-hot-toast";
 import handleApiError from "../utils/handleApiError";
+import { trackEvent } from "../analytics";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -33,7 +33,6 @@ export default function Login() {
   };
 
   return (
-    <MainLayout>
       <div className="min-h-screen flex bg-black text-white relative overflow-hidden">
 
         {/* LEFT */}
@@ -128,6 +127,5 @@ export default function Login() {
           </motion.div>
         </div>
       </div>
-    </MainLayout>
   );
 }

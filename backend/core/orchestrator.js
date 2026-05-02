@@ -3,49 +3,13 @@ import { getUserPlan } from "./entitlements.js";
 import { buildPaywall } from "./paywall.js";
 import { getUserMemory } from "./userMemory.js";
 import Groq from "groq-sdk";
-import { buildSystemPrompt } from "./brain.js";
-import { runtimeGate } from "./runtime.js";
 import crypto from "crypto";
+import { guardResponse } from "./guard.js";
 import { buildUsageLog } from "./tokenMeter.js";
-
-function addSmartEmoji(text, userMemory) {
-  if (!text) return text;
-
-  const t = text.toLowerCase();
-
-  // 🔥 ربط الحالة النفسية (لو موجودة)
-  const state = userMemory?.lastState;
-
-  // ===== حالات عامة =====
-  if (t.includes("نجح") || t.includes("أحسنت") || t.includes("ممتاز")) {
-    return text + " 💪";
-  }
-
-  if (t.includes("ابدأ") || t.includes("خطوة") || t.includes("حل")) {
-    return text + " 🚀";
-  }
-
-  if (t.includes("فهم") || t.includes("شرح") || t.includes("تفكير")) {
-    return text + " 🧠";
-  }
-
-  if (t.includes("خطأ") || t.includes("مشكلة") || t.includes("فشل")) {
-    return text + " ⚠️";
-  }
-
-  if (t.includes("تذكير") || t.includes("قلت")) {
-    return text + " 📌";
-  }
-
-  // ===== حالات نفسية من memoryExtractor =====
-  if (state === "lost") return text + " 🧭";
-  if (state === "anxious") return text + " 🧘";
-  if (state === "low_energy") return text + " 🔋";
-  if (state === "motivated") return text + " 🔥";
-  if (state === "victim_mode") return text + " 🧠";
-
-  return text;
-}
+import { buildSirajCore } from "./sirajCore.js";
+import { buildMemoryGraph } from "./memoryGraph.js";
+import { reasonDecision } from "./reasoningEngine.js";
+import { updateFeedback } from "./feedbackLoop.js";
 
 let groq;
 
@@ -61,9 +25,11 @@ function getGroq() {
   return groq;
 }
 
+// ================= ORCHESTRATOR =================
 export async function orchestrate({ convo, msg, userId, redis }) {
   try {
-    // ================= BASIC VALIDATION =================
+
+    // ================= VALIDATION =================
     if (!msg || typeof msg !== "string") {
       return { ok: false, reason: "invalid_input" };
     }
@@ -72,170 +38,210 @@ export async function orchestrate({ convo, msg, userId, redis }) {
       return { ok: false, reason: "too_short" };
     }
 
+    // ================= PLAN + ACCESS =================
+    const plan = await getUserPlan(userId, redis);
+    const access = getAccess(plan);
 
-const rateKey = `rate:${userId}`;
-const usageKey = `usage:${userId}`;
+    const rateKey = `rate:${userId}`;
+    const usageKey = `usage:${userId}`;
 
-const plan = await getUserPlan(userId, redis);
-const access = getAccess(plan);
-
-// ===== RATE + COST LIMIT =====
-if (redis) {
-  // RATE
-  const count = await redis.incr(rateKey);
-
-  if (count === 1) {
-    await redis.expire(rateKey, 60);
-  }
-
-  const rateCheck = access.checkRateLimit(count);
-  if (rateCheck?.blocked) {
-    return buildPaywall(rateCheck.reason, {
-      ...access,
-      current: count
-    });
-  }
-
-  // COST
-  const used = Number(await redis.get(usageKey) || 0);
-
-  const costCheck = access.checkCostLimit(used);
-  if (costCheck?.blocked) {
-    return buildPaywall(costCheck.reason, {
-      ...access,
-      current: used
-    });
-  }
-}
-
-// ===== MODEL =====
-const model = access.model;
-
-    // ================= CACHE KEY =================
-    const cacheKey = `ai:${userId}:${crypto
-      .createHash("sha256")
-      .update(msg + model + "v1")
-      .digest("hex")}`;
-
-    // ================= CACHE CHECK =================
+    // ================= RATE LIMIT =================
     if (redis) {
-      const cached = await redis.get(cacheKey);
-      if (cached) {
-        return { ok: true, text: cached, cached: true };
+      const count = await redis.incr(rateKey);
+      if (count === 1) await redis.expire(rateKey, 60);
+
+      const rateCheck = access.checkRateLimit(count);
+      if (rateCheck?.blocked) {
+        return buildPaywall(rateCheck.reason, { current: count });
+      }
+
+      const used = Number(await redis.get(usageKey) || 0);
+      const costCheck = access.checkCostLimit(used);
+
+      if (costCheck?.blocked) {
+        return buildPaywall(costCheck.reason, { current: used });
       }
     }
 
-    // ================= CONTEXT =================
-    const recent = convo
+    // ================= CACHE =================
+    const cacheKey = `ai:${userId}:${crypto
+      .createHash("sha256")
+      .update(msg + plan + "v1")
+      .digest("hex")}`;
+
+    if (redis) {
+      const cached = await redis.get(cacheKey);
+      if (cached) return { ok: true, text: cached, cached: true };
+    }
+
+    // ================= MEMORY =================
+    const userMemory = await getUserMemory(userId);
+    const graph = buildMemoryGraph(userMemory);
+    const focus = graph?.dominantGoal || null;
+    const risk = graph?.mainStruggle || null;
+
+// ================= CORE + REASONING =================
+const tempCore = buildSirajCore({
+  convo,
+  msg,
+  memory: userMemory
+});
+
+const reasoning = reasonDecision({
+  state: tempCore.state,
+  intent: tempCore.intent,
+  mode: tempCore.mode,
+  focus,
+  risk
+});
+
+const core = buildSirajCore({
+  convo,
+  msg,
+  memory: userMemory,
+  reasoning,
+  focus
+});
+
+// 🔥 override mode بالقرار الحقيقي
+if (!focus && !risk) {
+  reasoning.mode = "respond";
+}
+ 
+   const recent = convo
       .slice(-20)
       .map(m => ({ role: m.role, content: m.content }));
 
-    const userMemory = await getUserMemory(userId);
+const lastUserMsgs = convo
+  .filter(m => m.role === "user")
+  .slice(-5)
+  .map(m => m.content.toLowerCase());
 
-    const systemPrompt = buildSystemPrompt(convo, userId, userMemory);
+const repeatedFailure =
+  lastUserMsgs.filter(m => m.includes("فشلت")).length >= 2;
 
-    // ================= AI CALL =================
-    const completion = await getGroq().chat.completions.create({
-      model,
-      messages: [systemPrompt, ...recent],
-      temperature: 0.7,
-      max_tokens: 400,
-      stream: false
-    });
+if (repeatedFailure) {
+  core.systemPrompt.content += `
+ALERT:
+User is repeating failure pattern → confront directly. Do NOT comfort.
+`;
+}
 
-    let fullText =
-      completion?.choices?.[0]?.message?.content || "";
+// ================= AI CALL (SMART LOOP) =================
+let attempts = 0;
+const maxAttempts = 2;
 
-    let finalText = fullText;
+let text = "";
+let lastCandidate = "";
 
-    // ================= RUNTIME GATE =================
-    const gate = runtimeGate(fullText);
+while (attempts < maxAttempts) {
 
-    if (!gate.ok && gate.action === "regenerate") {
-      const retry = await getGroq().chat.completions.create({
-        model,
-        messages: [
-          systemPrompt,
-          ...recent,
-          { role: "user", content: "Be more direct and clearer." }
-        ],
-        temperature: 0.5,
-        max_tokens: 300
-      });
+  const retryHint = "Be clearer and more specific.";
 
-      finalText =
-        retry?.choices?.[0]?.message?.content || fullText;
-    }
+  const messages = [
+    core.systemPrompt,
+    ...recent.slice(-10),
+    ...(attempts > 0
+      ? [{ role: "system", content: retryHint }]
+      : [])
+  ];
 
-    // ================= SMART REMINDER =================
-    if (userMemory?.goals?.length && msg.length < 120) {
-      finalText += `
+  const completion = await getGroq().chat.completions.create({
+    model: access.model,
+    messages,
+    temperature: attempts === 0 ? 0.5 : 0.3,
+    max_tokens: 220
+  });
 
-تذكير: قلت أنك تريد ${userMemory.goals.slice(-1)[0]} — هل تقدمت؟`;
-    }
+  const candidate = completion?.choices?.[0]?.message?.content || "";
+  lastCandidate = candidate;
 
-    // ================= TOKEN TRACK =================
+  const check = guardResponse(candidate);
+
+  if (check.ok) {
+    text = candidate;
+    break;
+  }
+
+  attempts++;
+}
+ 
+ // بدل تضخيم prompt → فقط توجيه خفيف
+  recent.push({
+    role: "user",
+    content: "Re-evaluate and respond more clearly and concisely."
+  });
+
+// fallback
+if (!text || text.length < 15) {
+  text = lastCandidate || "Unable to generate response.";
+}
+
+    // ================= USAGE =================
     const usage = buildUsageLog({
       prompt: msg,
-      response: finalText,
-      model
+      response: text,
+      model: access.model
     });
 
-    console.log("AI_USAGE", {
-      userId,
-      ...usage
-    });
-
-    // ================= UPDATE DAILY COST =================
     if (redis) {
       await redis.incrByFloat(usageKey, usage.cost);
       await redis.expire(usageKey, 86400);
     }
 
-    // ================= MEMORY EXTRACTION =================
-    if (access.memory && msg.length > 40) {
-      try {
-        const { extractUserMemory } = await import("./memoryExtractor.js");
-        const { updateUserMemory } = await import("./userMemory.js");
+// ================= MEMORY UPDATE =================
+function shouldRunMemoryExtraction(msg, userMemory) {
+  const msgText = msg.toLowerCase();
 
-        const extracted = await extractUserMemory(msg);
+  const strongSignals =
+    /اريد|هدفي|اعاني|مشكل|تعبان|ضايع|فشلت|بدأت/.test(msgText);
 
-        if (extracted) {
-          await updateUserMemory(userId, extracted);
-        }
-      } catch (e) {
-        console.error("[MEMORY EXTRACT FAIL]", e);
-      }
-    }
+  const meaningful = msg.length > 70;
 
-    // ================= CACHE SAVE =================
-    if (redis && finalText) {
-      await redis.setEx(cacheKey, 600, finalText);
-    }
+  const stateChange =
+    userMemory?.lastState &&
+    userMemory.lastState !== "normal";
 
-// ================= ACCOUNTABILITY =================
-if (userMemory?.goals?.length) {
-  const lastGoal = userMemory.goals.slice(-1)[0];
+  const lastCheck = userMemory?.lastCheckAt
+    ? Date.now() - new Date(userMemory.lastCheckAt).getTime()
+    : Infinity;
 
-  const lastCheck = userMemory.lastCheckAt
-    ? new Date(userMemory.lastCheckAt).getTime()
-    : 0;
+  const cooldownOk = lastCheck > 1000 * 60 * 30;
 
-  const now = Date.now();
+  return (strongSignals && meaningful && cooldownOk) || stateChange;
+}
 
-  // بعد ~3 دقائق (تجربة أولية)
-  if (now - lastCheck > 3 * 60 * 1000) {
-    finalText += `
+// ================= MEMORY UPDATE =================
+const shouldExtract = shouldRunMemoryExtraction(msg, userMemory);
 
-قلت أنك تريد: ${lastGoal}
-ماذا فعلت فيه حتى الآن؟`;
+if (access.memory && shouldExtract) {
+  try {
+    const { extractUserMemory } = await import("./memoryExtractor.js");
+    const { updateUserMemory } = await import("./userMemory.js");
+
+    const extracted = await extractUserMemory(msg);
+    if (extracted) await updateUserMemory(userId, extracted);
+
+  } catch (e) {
+    console.error("[MEMORY FAIL]", e);
   }
 }
 
-    return { ok: true, text: addSmartEmoji(finalText, userMemory) };
+    // ================= FEEDBACK LOOP =================
+    await updateFeedback(userMemory, msg, text);
+
+    // ================= CACHE SAVE =================
+    if (redis) {
+      await redis.setEx(cacheKey, 600, text);
+    }
+
+    return {
+      ok: true,
+      text
+    };
 
   } catch (e) {
     console.error("[ORCHESTRATOR ERROR]", e);
-    return { ok: false, reason: "orchestrator_fail" };
+    return { ok: false, reason: "internal_error" };
   }
 }

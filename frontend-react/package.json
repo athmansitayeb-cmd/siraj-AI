@@ -9,6 +9,20 @@
     "lint": "eslint .",
     "preview": "vite preview"
   },
+  "reactSnap": {
+    "source": "dist",
+    "inlineCss": true,
+    "crawl": true,
+    "routes": [
+      "/",
+      "/about",
+      "/features",
+      "/pricing",
+      "/docs",
+      "/ai",
+      "/platform"
+    ]
+  },
   "dependencies": {
     "@headlessui/react": "^2.2.9",
     "@react-three/drei": "^10.7.7",

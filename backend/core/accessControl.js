@@ -3,7 +3,7 @@ export function getAccess(plan) {
     free: {
       rpm: 10,
       dailyCost: 0.01,
-      model: "llama-3.1-8b-instant",
+      model: "llama-3.3-70b-versatile",
       memory: false
     },
 

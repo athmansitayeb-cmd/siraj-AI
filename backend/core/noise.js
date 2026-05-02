@@ -1,16 +1,20 @@
 export function isNoise(text) {
-  const clean = text.replace(/\s/g, "");
+  if (!text) return true;
 
-  if (!clean.length) return true;
+  const t = text.toLowerCase().trim();
 
-  // نسبة رموز غريبة
-  const weirdChars = clean.match(/[^a-zA-Z0-9\u0600-\u06FF]/g) || [];
-  const weirdRatio = weirdChars.length / clean.length;
+  if (t.length < 15) return true;
 
-  if (weirdRatio > 0.6) return true;
+  const noisePatterns = [
+    "lorem",
+    "test",
+    "asdf",
+    "....",
+    "؟؟؟؟"
+  ];
 
-  // تكرار حرف بشكل غير طبيعي
-  if (/(.)\1{6,}/.test(clean)) return true;
+  const repetitive =
+    new Set(t.split(" ")).size / t.split(" ").length < 0.5;
 
-  return false;
+  return noisePatterns.some(p => t.includes(p)) || repetitive;
 }

@@ -19,7 +19,7 @@ const uniqueLines = (text) => {
 };
 
 // ================= SYSTEM PROMPT =================
-export function buildSystemPrompt(messages, userId, userMemory) {
+export function buildSystemPrompt(messages, userId, userMemory, mode, pattern) {
   const ctx = analyzeContext(messages);
   const memory = extractMemory(messages);
   const personality = getPersonality();
@@ -97,6 +97,32 @@ Goals: ${(userMemory?.goals || []).slice(-2).join(", ")}
 Struggles: ${(userMemory?.struggles || []).slice(-2).join(", ")}
 Habits: ${(userMemory?.habits || []).slice(-2).join(", ")}
 State: ${userMemory?.lastState || "unknown"}
+
+Response Logic:
+
+- If mode = confront:
+  → expose repetition clearly
+  → challenge behavior directly
+
+- If mode = diagnose:
+  → find root cause
+  → ask one sharp question
+
+- If mode = clarify:
+  → reduce confusion
+  → give 1 clear direction
+
+- If mode = push:
+  → call out avoidance
+  → force engagement
+
+STRICT RULES:
+- Max 5 lines
+- No generic advice
+- Always include:
+  1 insight
+  1 direct question
+  1 small action
 
 ${personality}
 `
