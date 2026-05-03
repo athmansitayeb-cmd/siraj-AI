@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { io } from "socket.io-client";
 import { motion, AnimatePresence } from "framer-motion";
 import ReactMarkdown from "react-markdown";
+import { trackEvent } from "../analytics";
 
 export default function Chat() {
   const [messages, setMessages] = useState([]);
@@ -17,6 +18,10 @@ export default function Chat() {
   if (!token) {
     return <div className="text-white p-10">Unauthorized</div>;
   }
+
+useEffect(() => {
+  trackEvent("open_chat");
+}, []);
 
   useEffect(() => {
     fetch("https://siraj.software/api/conversation/main-chat", {
@@ -35,7 +40,14 @@ export default function Chat() {
 
     socketRef.current = socket;
 
+    let firstToken = true;
+
     socket.on("message-stream", (data) => {
+      if (firstToken) {
+        trackEvent("ai_response_start");
+        firstToken = false;
+      }
+
       setTyping(false);
 
       setMessages(prev => {
@@ -72,6 +84,12 @@ export default function Chat() {
     if (!input.trim()) return;
 
     const msg = input;
+ 
+    trackEvent("send_message", {
+      length: msg.length
+    });
+
+
     setInput("");
     setTyping(true);
 

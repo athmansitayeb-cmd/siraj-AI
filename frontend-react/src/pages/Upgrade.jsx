@@ -1,36 +1,48 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import { trackEvent } from "../analytics";
 
 export default function Upgrade() {
   const [loading, setLoading] = useState(false);
 
-  const upgrade = async (plan) => {
-    try {
-      setLoading(true);
+useEffect(() => {
+  trackEvent("view_upgrade");
+}, []);
 
-      const token = localStorage.getItem("siraj_token");
+const upgrade = async (plan) => {
+  console.log("🔥 UPGRADE CLICKED", plan);
+  try {
+    setLoading(true);
 
-      const res = await fetch(
-        "https://siraj.software/api/paypal/subscription/create",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: "Bearer " + token
-          },
-          body: JSON.stringify({ plan })
-        }
-      );
+trackEvent("start_checkout", {
+  plan,
+  currency: "USD",
+  value: plan === "pro_yearly" ? 40 : 5
+});
 
-      const data = await res.json();
+    const token = localStorage.getItem("siraj_token");
 
-      if (data.approveLink) {
-        window.location.href = data.approveLink;
+    const res = await fetch(
+      "https://siraj.software/api/paypal/subscription/create",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token
+        },
+        body: JSON.stringify({ plan })
       }
-    } finally {
-      setLoading(false);
+    );
+
+    const data = await res.json();
+
+    if (data.approveLink) {
+      window.location.href = data.approveLink;
     }
-  };
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
       <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center px-6">

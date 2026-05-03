@@ -1,6 +1,9 @@
 import express from "express";
 import User from "../models/User.js";
-import { setUserPlan, invalidateUserPlanCache } from "../core/entitlements.js";
+import {
+  setUserPlan,
+  invalidateUserPlanCache
+} from "../core/entitlements.js";
 import { getPayPalAccessToken } from "../core/paypalAuth.js";
 import fetch from "node-fetch";
 
@@ -55,25 +58,17 @@ async function verifyWebhook(req, eventBody) {
  * 🔥 FIND USER
  */
 async function findUser(subscriptionId, resource) {
-  // 1. أفضل حالة
   if (resource?.custom_id) {
     return await User.findById(resource.custom_id);
   }
 
-  // 2. fallback
   if (subscriptionId) {
-    const user = await User.findOne({
+    return await User.findOne({
       paypalSubscriptionId: subscriptionId
     });
-
-    if (user) return user;
   }
 
-  console.warn("[FIND USER FAIL]", {
-    subscriptionId,
-    resource
-  });
-
+  console.warn("[FIND USER FAIL]", { subscriptionId, resource });
   return null;
 }
 
@@ -94,7 +89,6 @@ router.post("/webhook", express.raw({ type: "*/*" }), async (req, res) => {
     }
 
     console.log("[PAYPAL EVENT]", event.event_type);
-    console.log("FULL EVENT:", JSON.stringify(event, null, 2));
 
     const resource = event.resource || {};
 
@@ -117,37 +111,54 @@ router.post("/webhook", express.raw({ type: "*/*" }), async (req, res) => {
       return res.sendStatus(200);
     }
 
+    const redis = req.app.locals.redis;
+
     switch (event.event_type) {
-      case "BILLING.SUBSCRIPTION.ACTIVATED":
-        await setUserPlan(user._id, "pro", req.app.locals.redis);
-        await invalidateUserPlanCache(user._id, req.app.locals.redis);
+
+      /**
+       * ✅ ACTIVATION
+       */
+      case "BILLING.SUBSCRIPTION.ACTIVATED": {
+        await setUserPlan(user._id, "pro", redis);
 
         await User.findByIdAndUpdate(user._id, {
+          plan: "pro",
           subscriptionStatus: "active",
           paypalSubscriptionId: subscriptionId
         });
 
+        await invalidateUserPlanCache(user._id, redis);
+
         console.log("[PLAN -> PRO]", user._id);
         break;
+      }
 
+      /**
+       * ❌ CANCEL / SUSPEND / EXPIRE
+       */
       case "BILLING.SUBSCRIPTION.CANCELLED":
       case "BILLING.SUBSCRIPTION.SUSPENDED":
-      case "BILLING.SUBSCRIPTION.EXPIRED":
-        await setUserPlan(user._id, "free", req.app.locals.redis);
-        await invalidateUserPlanCache(user._id, req.app.locals.redis);
+      case "BILLING.SUBSCRIPTION.EXPIRED": {
+        await setUserPlan(user._id, "free", redis);
 
         await User.findByIdAndUpdate(user._id, {
-          subscriptionStatus: "cancelled"
+          plan: "free",
+          subscriptionStatus: "cancelled",
+          paypalSubscriptionId: null
         });
+
+        await invalidateUserPlanCache(user._id, redis);
 
         console.log("[PLAN -> FREE]", user._id);
         break;
+      }
 
       default:
         console.log("[IGNORED EVENT]", event.event_type);
     }
 
     return res.sendStatus(200);
+
   } catch (err) {
     console.error("[WEBHOOK ERROR]", err);
     return res.sendStatus(500);

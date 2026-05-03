@@ -1,7 +1,10 @@
 export const trackEvent = (name, params = {}) => {
-  if (typeof window !== "undefined" && window.gtag) {
-    window.gtag("event", name, params);
-  } else {
-    console.log("Analytics not ready:", name);
+  console.log("EVENT:", name, params);
+
+  if (typeof window !== "undefined" && typeof window.gtag === "function") {
+    window.gtag("event", name, {
+      ...params,
+      app: "siraj"
+    });
   }
 };
