@@ -5,6 +5,7 @@ import { useState } from "react";
 import api from "../services/api";
 import toast from "react-hot-toast";
 import handleApiError from "../utils/handleApiError";
+import { trackEvent } from "../analytics";
 
 export default function Register() {
   const navigate = useNavigate();
@@ -29,7 +30,9 @@ export default function Register() {
   };
 
   return (
-      <div className="min-h-screen flex bg-black text-white relative overflow-hidden">
+    <>
+
+      <div className="min-h-screen flex bg-[#07111F] text-white relative overflow-hidden">
 
         {/* LEFT SIDE (branding) */}
         <div className="hidden md:flex flex-col justify-center w-1/2 px-16 relative">
@@ -86,7 +89,7 @@ export default function Register() {
                 type="text"
                 placeholder="Full Name"
                 {...register("name", { required: true })}
-                className="w-full p-4 rounded-xl bg-black/40 border border-white/10 focus:border-yellow-400 outline-none transition"
+                className="w-full p-4 rounded-xl bg-[#07111F]/40 border border-white/10 focus:border-yellow-400 outline-none transition"
               />
               {errors.name && <p className="text-red-400 text-xs">Required</p>}
 
@@ -95,7 +98,7 @@ export default function Register() {
                 type="email"
                 placeholder="Email"
                 {...register("email", { required: true })}
-                className="w-full p-4 rounded-xl bg-black/40 border border-white/10 focus:border-yellow-400 outline-none transition"
+                className="w-full p-4 rounded-xl bg-[#07111F]/40 border border-white/10 focus:border-yellow-400 outline-none transition"
               />
               {errors.email && <p className="text-red-400 text-xs">Required</p>}
 
@@ -105,7 +108,7 @@ export default function Register() {
                   type={showPass ? "text" : "password"}
                   placeholder="Password"
                   {...register("password", { required: true, minLength: 6 })}
-                  className="w-full p-4 rounded-xl bg-black/40 border border-white/10 focus:border-yellow-400 outline-none transition pr-12"
+                  className="w-full p-4 rounded-xl bg-[#07111F]/40 border border-white/10 focus:border-yellow-400 outline-none transition pr-12"
                 />
 
                 <button
@@ -154,5 +157,6 @@ export default function Register() {
           </motion.div>
         </div>
       </div>
+    </>
   );
 }

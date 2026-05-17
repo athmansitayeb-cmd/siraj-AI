@@ -1,13 +1,8 @@
-import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 
 export default function AI() {
   return (
     <>
-      <Helmet>
-        <title>AI Assistant Platform - SIRAJ</title>
-        <meta name="description" content="SIRAJ is an advanced AI assistant platform for intelligent automation and decision support." />
-      </Helmet>
 
       <h1>AI Assistant Platform</h1>
 

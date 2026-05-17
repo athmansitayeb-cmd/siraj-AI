@@ -8,6 +8,8 @@ export default function Dashboard() {
   }
 
   return (
+    <>
+
     <div className="min-h-screen bg-gradient-to-b from-black via-gray-900 to-black text-white flex flex-col items-center justify-center px-6">
 
       {/* LOGO */}
@@ -51,5 +53,6 @@ export default function Dashboard() {
       </p>
 
     </div>
+    </>
   );
 }

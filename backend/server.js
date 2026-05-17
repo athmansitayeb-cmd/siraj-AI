@@ -32,6 +32,7 @@ import dashboardRouter from "./routes/dashboard.js";
 import paypalWebhook from "./routes/paypal-webhook.js";
 import paypalSubscriptionRouter from "./routes/paypal-subscription.js";
 import dailyVerse from "./routes/dailyVerse.js";
+import { buildLimitEngine } from "./core/limitEngine.js";
 
 const redis = createClient({ url: process.env.REDIS_URL });
 
@@ -144,33 +145,78 @@ credentials: true
 
 // ================= SOCKET AUTH =================
 io.use(async (socket, next) => {
-try {
-const token = socket.handshake.auth?.token;
-if (!token) return next(new Error("unauthorized"));
+  try {
+    const token = socket.handshake.auth?.token;
 
-const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // 🟢 GUEST MODE
+    if (!token) {
+      socket.user = {
+        id: "guest_" + socket.id,
+        plan: "guest"
+      };
+      return next();
+    }
 
-const user = await User.findById(decoded.id);
-if (!user) return next(new Error("unauthorized"));
+    // 🔵 AUTH MODE
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-socket.user = {
-  id: user._id.toString(),
-  plan: await getUserPlan(user._id.toString(), redis)
-};
+    const user = await User.findById(decoded.id);
+    if (!user) return next(new Error("unauthorized"));
 
-next();
+    socket.user = {
+      id: user._id.toString(),
+      plan: await getUserPlan(user._id.toString(), redis)
+    };
 
-} catch (err) {
-next(new Error("unauthorized"));
-}
+    next();
+
+  } catch (err) {
+    next(new Error("unauthorized"));
+  }
 });
 
 // ================= SOCKET CHAT =================
 io.on("connection", (socket) => {
   console.log(`[SOCKET] connected: ${socket.user.id}`);
 
+  console.log("USER DEBUG:", socket.user);
+
   socket.on("message", async ({ conversationId, msg }) => {
     try {
+      // ================= LIMIT ENGINE =================
+      const limiter = buildLimitEngine({
+        redis,
+        plan: socket.user.plan,
+        userId: socket.user.id
+      });
+
+      const limit = await limiter.run(msg);
+
+      if (!limit.ok) {
+if (
+  limit.reason === "too_short" ||
+  limit.reason === "invalid_input" ||
+  limit.reason === "message_too_long"
+) {
+
+  socket.emit("message-error", {
+    msg: limit.reason || "error",
+    meta: limit
+  });
+
+} else {
+
+  socket.emit("try-limit-reached", {
+    title: limit.reason,
+    message: "Upgrade required or limit reached",
+    meta: limit
+  });
+
+}
+        return;
+      }
+
+      // ================= VALIDATION =================
       const cid = safeConversationId(conversationId);
       if (!cid || !msg) return;
 
@@ -179,6 +225,7 @@ io.on("connection", (socket) => {
         return;
       }
 
+      // ================= LOAD CONVO =================
       let convo = await Conversation.findOne({
         userId: socket.user.id,
         conversationId: cid
@@ -192,47 +239,16 @@ io.on("connection", (socket) => {
         });
       }
 
-      // ================= USER MESSAGE =================
-      convo.messages.push({
-        role: "user",
-        content: msg
-      });
-
-      convo.messages = convo.messages.slice(-50);
-
+      // ================= DUP CHECK =================
       const lastMsgKey = `last:${socket.user.id}`;
       const last = await redis.get(lastMsgKey);
       if (last === msg) return;
 
       await redis.setEx(lastMsgKey, 2, msg);
 
-      const rateKey = `rl:${socket.user.id}`;
-      const count = await redis.incr(rateKey);
-
-      if (count === 1) await redis.expire(rateKey, 60);
-
-      if (count > 20) {
-        socket.emit("message-error", { msg: "RATE_LIMIT_AI" });
-        return;
-      }
-
-      const dailyKey = `daily:${socket.user.id}`;
-      const daily = await redis.incr(dailyKey);
-
-      if (daily === 1) {
-        await redis.expire(dailyKey, 86400);
-      }
-
-      const currentPlan = await getUserPlan(socket.user.id, redis);
-      const limit = currentPlan === "pro" ? 2000 : 200;
-
-      if (daily > limit) {
-        socket.emit("message-error", {
-          msg: "LIMIT_REACHED",
-          plan: currentPlan
-        });
-        return;
-      }
+      // ================= SAVE USER =================
+      convo.messages.push({ role: "user", content: msg });
+      convo.messages = convo.messages.slice(-50);
 
       // ================= AI =================
       const orchestrateResult = await orchestrate({
@@ -243,6 +259,7 @@ io.on("connection", (socket) => {
       });
 
       if (!orchestrateResult.ok) {
+       console.log("BLOCK DEBUG:", orchestrateResult);
         socket.emit("message-error", {
           msg: "AI_BLOCKED",
           reason: orchestrateResult.reason
@@ -258,21 +275,15 @@ io.on("connection", (socket) => {
       for (const token of text.split(/(\s+)/)) {
         buffer += token;
 
-        socket.emit("message-stream", {
-          token
-        });
+        socket.emit("message-stream", { token });
       }
 
       socket.emit("message-stream-end", {
         text: buffer
       });
 
-      // ================= FINAL SAVE (IMPORTANT FIX) =================
-      convo.messages.push({
-        role: "assistant",
-        content: buffer
-      });
-
+      // ================= SAVE ASSISTANT =================
+      convo.messages.push({ role: "assistant", content: buffer });
       convo.messages = convo.messages.slice(-50);
 
       await Conversation.updateOne(

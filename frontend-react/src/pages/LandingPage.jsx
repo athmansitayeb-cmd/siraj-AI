@@ -1,19 +1,10 @@
-import { Helmet } from "react-helmet-async";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 
 export default function LandingPage() {
   return (
     <>
-      <Helmet>
-        <title>SIRAJ AI - Intelligent Automation Platform</title>
-        <meta
-          name="description"
-          content="SIRAJ AI is a next-generation automation and intelligence platform for building smart workflows and AI-driven systems."
-        />
-      </Helmet>
-
-      <div className="relative min-h-screen bg-black text-white overflow-hidden">
+      <div className="relative min-h-screen bg-[#07111F] text-white overflow-hidden">
 
         {/* Background glow */}
         <div className="absolute inset-0">
@@ -22,24 +13,6 @@ export default function LandingPage() {
         </div>
 
         {/* NAV */}
-        <header className="relative z-10 flex justify-between items-center px-8 py-6 border-b border-white/10">
-          <div className="text-yellow-400 font-bold text-xl tracking-wide">
-            SIRAJ
-          </div>
-
-          <nav className="hidden md:flex gap-6 text-sm text-gray-400">
-            <Link to="/features" className="hover:text-white">Features</Link>
-            <Link to="/pricing" className="hover:text-white">Pricing</Link>
-            <Link to="/docs" className="hover:text-white">Docs</Link>
-          </nav>
-
-          <Link
-            to="/login"
-            className="px-4 py-2 bg-white text-black rounded-lg font-semibold hover:scale-105 transition"
-          >
-            Launch App
-          </Link>
-        </header>
 
         {/* HERO */}
         <main className="relative z-10 flex flex-col items-center justify-center text-center px-6 pt-24">
@@ -61,7 +34,7 @@ export default function LandingPage() {
           {/* CTA */}
           <div className="mt-10 flex gap-4">
             <Link
-              to="/register"
+              to="/try"
               className="px-6 py-3 bg-yellow-400 text-black font-semibold rounded-xl hover:scale-105 transition"
             >
               Start Free

@@ -18,9 +18,11 @@ export default function ForgotPassword() {
   };
 
   return (
+    <>
+  
       <div className="flex justify-center items-center py-20">
         <motion.div
-          className="bg-black p-10 rounded-3xl shadow-2xl w-full max-w-md border border-yellow-400"
+          className="bg-[#07111F] p-10 rounded-3xl shadow-2xl w-full max-w-md border border-yellow-400"
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.6 }}
@@ -34,7 +36,7 @@ export default function ForgotPassword() {
               type="email"
               placeholder="Email"
               {...register("email", { required: true })}
-              className="w-full p-3 rounded-xl border border-yellow-400 bg-black text-yellow-400"
+              className="w-full p-3 rounded-xl border border-yellow-400 bg-[#07111F] text-yellow-400"
             />
             {errors.email && <p className="text-red-500 text-sm">Email is required</p>}
 
@@ -47,5 +49,6 @@ export default function ForgotPassword() {
           </form>
         </motion.div>
       </div>
+    </>
   );
 }

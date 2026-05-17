@@ -1,33 +1,26 @@
-import { Helmet } from "react-helmet-async";
-
 export default function Docs() {
   return (
-<>
-  <Helmet>
-    <title>Documentation - SIRAJ AI Platform</title>
-    <meta name="description" content="Complete documentation for SIRAJ AI assistant, API usage, and automation features." />
-  </Helmet>
+    <main className="p-10 text-white max-w-3xl">
+      <h1>SIRAJ AI Documentation</h1>
 
-  <main className="p-10 text-white max-w-3xl">
-    <h1>Documentation</h1>
+      <p>
+        Complete technical documentation for integrating SIRAJ AI into your
+        applications, APIs, and automation workflows.
+      </p>
 
-    <p>
-      Learn how to integrate and use SIRAJ AI platform for automation,
-      AI chat systems, and workflow intelligence.
-    </p>
+      <h2>Getting Started</h2>
+      <ul>
+        <li>Authentication system</li>
+        <li>API endpoints usage</li>
+        <li>Chat and AI integration</li>
+        <li>Webhook and automation triggers</li>
+      </ul>
 
-    <h2>Getting Started</h2>
-    <ul>
-      <li>Authentication</li>
-      <li>API usage</li>
-      <li>AI chat integration</li>
-    </ul>
-
-    <h2>Developer Tools</h2>
-    <p>
-      SIRAJ provides API access for developers to build intelligent applications.
-    </p>
-  </main>
-</>
+      <h2>Developer Tools</h2>
+      <p>
+        SIRAJ provides a flexible API layer designed for scalable AI applications,
+        automation pipelines, and real-time processing.
+      </p>
+    </main>
   );
 }

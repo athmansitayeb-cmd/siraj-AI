@@ -39,6 +39,7 @@ export default function AppRouter() {
         <Route path="/docs" element={<Docs />} />
         <Route path="/ai" element={<AI />} />
         <Route path="/platform" element={<Platform />} />
+        <Route path="/try" element={<Chat />} />
       </Route>
 
       {/* AUTH */}

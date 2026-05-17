@@ -1,22 +1,27 @@
 export function buildPaywall(reason, limits = {}) {
   const base = "لقد وصلت للحد المجاني.";
 
-  const messages = {
-    rate_limited: {
-      title: "🚀 تم الوصول للحد اليومي",
-      text: `${base} الترقية إلى Pro ترفع عدد الطلبات اليومية وتزيد السرعة.`,
-    },
+const messages = {
+  rate_limited: {
+    title: "🚀 تم الوصول للحد اليومي",
+    text: `${base} الترقية إلى Pro ترفع عدد الطلبات اليومية وتزيد السرعة.`,
+  },
 
-    daily_limit_reached: {
-      title: "⚡ انتهى الاستخدام اليومي",
-      text: `${base} يمكنك المتابعة عبر Pro بدون انقطاع.`,
-    },
+  daily_limit_reached: {
+    title: "⚡ انتهى الاستخدام اليومي",
+    text: `${base} يمكنك المتابعة عبر Pro بدون انقطاع.`,
+  },
 
-    cost_limit: {
-      title: "💰 تم تجاوز حد الاستهلاك",
-      text: `${base} Pro يمنحك سقف أعلى ونموذج أقوى.`,
-    }
-  };
+  guest_limit_reached: {
+    title: "✨ أكمل المحادثة",
+    text: "لقد استخدمت الرسائل المجانية المتاحة للزوار. أنشئ حساباً مجانياً للمتابعة وحفظ محادثاتك.",
+  },
+
+  cost_limit: {
+    title: "💰 تم تجاوز حد الاستهلاك",
+    text: `${base} Pro يمنحك سقف أعلى ونموذج أقوى.`,
+  }
+};
 
   const p = messages[reason] || messages.rate_limited;
 

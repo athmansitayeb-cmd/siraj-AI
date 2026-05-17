@@ -103,4 +103,111 @@ router.post("/", requireAuth, async (req, res) => {
   }
 });
 
+// ================== LIST CONVERSATIONS ==================
+router.get("/", requireAuth, async (req, res) => {
+
+  try {
+
+    const conversations = await Conversation.find({
+      userId: req.user.id
+    })
+    .sort({ updatedAt: -1 })
+    .limit(30);
+
+    const formatted = conversations.map((c) => {
+
+      const firstUserMessage =
+        c.messages.find(m => m.role === "user")?.content ||
+        "New Conversation";
+
+      return {
+        id: c.conversationId,
+        title: firstUserMessage.slice(0, 40),
+        updatedAt: c.updatedAt
+      };
+    });
+
+    res.json(formatted);
+
+  } catch (e) {
+    res.status(500).json({ error: "server error" });
+  }
+
+});
+
+router.patch("/:id/title", requireAuth, async (req, res) => {
+  try {
+    const { title } = req.body;
+
+    await Conversation.updateOne(
+      {
+        userId: req.user.id,
+        conversationId: req.params.id
+      },
+      {
+        $set: { title }
+      }
+    );
+
+    res.json({ ok: true });
+
+  } catch (e) {
+    res.status(500).json({ error: "server error" });
+  }
+});
+
+router.delete("/:id", requireAuth, async (req, res) => {
+  try {
+    await Conversation.deleteOne({
+      userId: req.user.id,
+      conversationId: req.params.id
+    });
+
+    res.json({ ok: true });
+
+  } catch (e) {
+    res.status(500).json({ error: "server error" });
+  }
+});
+
+// ================= GET ALL CONVERSATIONS =================
+router.get("/", requireAuth, async (req, res) => {
+  try {
+    const convos = await Conversation.find({
+      userId: req.user.id
+    }).sort({ updatedAt: -1 });
+
+    res.json(
+      convos.map(c => ({
+        id: c.conversationId,
+        title: c.title,
+        updatedAt: c.updatedAt
+      }))
+    );
+
+  } catch (e) {
+    res.status(500).json({ error: "server error" });
+  }
+});
+
+router.patch("/:id/title", requireAuth, async (req, res) => {
+  const { title } = req.body;
+
+  await Conversation.updateOne(
+    { userId: req.user.id, conversationId: req.params.id },
+    { $set: { title } }
+  );
+
+  res.json({ ok: true });
+});
+
+router.delete("/:id", requireAuth, async (req, res) => {
+  await Conversation.deleteOne({
+    userId: req.user.id,
+    conversationId: req.params.id
+  });
+
+  res.json({ ok: true });
+});
+
 export default router;

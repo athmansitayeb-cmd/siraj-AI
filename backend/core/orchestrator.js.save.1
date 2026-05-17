@@ -10,7 +10,6 @@ import { buildSirajCore } from "./sirajCore.js";
 import { buildMemoryGraph } from "./memoryGraph.js";
 import { reasonDecision } from "./reasoningEngine.js";
 import { updateFeedback } from "./feedbackLoop.js";
-import { buildLimitEngine } from "./limitEngine.js";
 
 let groq;
 
@@ -30,42 +29,44 @@ function getGroq() {
 export async function orchestrate({ convo, msg, userId, redis }) {
   try {
 
-// ================= VALIDATION =================
-if (!msg || typeof msg !== "string") {
-  return { ok: false, reason: "invalid_input" };
-}
+    // ================= VALIDATION =================
+    if (!msg || typeof msg !== "string") {
+      return { ok: false, reason: "invalid_input" };
+    }
 
-if (msg.length < 2) {
-  return { ok: false, reason: "too_short" };
-}
+    if (msg.length < 2) {
+      return { ok: false, reason: "too_short" };
+    }
 
-// 🔥 HARD LIMIT: message length (free protection)
-if (msg.length > 800) {
-  return buildPaywall("message_too_long", {
-    limit: 800
-  });
-}
+    // ================= PLAN + ACCESS =================    
+const isGuest = typeof userId === "string" && userId.startsWith("guest_");
 
-// ================= PLAN + ACCESS =================
-const isGuest =
-  typeof userId === "string" && userId.startsWith("guest_");
+const plan = isGuest
+     ? "guest"
+     : await getUserPlan(userId, redis);
 
-let rawPlan;
+    const access = getAccess(plan);
 
-try {
-  rawPlan = isGuest
-    ? "free"
-    : await getUserPlan(userId, redis);
-} catch (e) {
-  console.error("[PLAN FAIL]", e);
-  rawPlan = "free";
-}
+    const rateKey = `rate:${userId}`;
+    const usageKey = `usage:${userId}`;
 
-const plan = ["free", "pro", "guest"].includes(rawPlan)
-  ? rawPlan
-  : "free";
+    // ================= RATE LIMIT =================
+    if (redis) {
+      const count = await redis.incr(rateKey);
+      if (count === 1) await redis.expire(rateKey, 60);
 
-const access = getAccess(plan);
+      const rateCheck = access.checkRateLimit(count);
+      if (rateCheck?.blocked) {
+        return buildPaywall(rateCheck.reason, { current: count });
+      }
+
+      const used = Number(await redis.get(usageKey) || 0);
+      const costCheck = access.checkCostLimit(used);
+
+      if (costCheck?.blocked) {
+        return buildPaywall(costCheck.reason, { current: used });
+      }
+    }
 
     // ================= CACHE =================
     const cacheKey = `ai:${userId}:${crypto
@@ -175,6 +176,17 @@ if (!text || text.length < 15) {
   text = lastCandidate || "Unable to generate response.";
 }
 
+    // ================= USAGE =================
+    const usage = buildUsageLog({
+      prompt: msg,
+      response: text,
+      model: access.model
+    });
+
+    if (redis) {
+      await redis.incrByFloat(usageKey, usage.cost);
+      await redis.expire(usageKey, 86400);
+    }
 
 // ================= MEMORY UPDATE =================
 function shouldRunMemoryExtraction(msg, userMemory) {
