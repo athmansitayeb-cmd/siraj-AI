@@ -1,173 +1,258 @@
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+
 import {
-  Menu,
   Sparkles,
+  ArrowRight,
+  Menu,
   LayoutDashboard,
   MessageSquare,
   FileText,
-  Gem,
-  Zap,
+  Blocks,
+  CreditCard,
   LogOut,
-  Wifi
 } from "lucide-react";
 
-export default function Navbar({ openSidebar }) {
+import {
+  PrimaryButton,
+} from "./ui/primitives";
+
+export default function Navbar({
+  openSidebar,
+}) {
+
   const navigate = useNavigate();
+
   const location = useLocation();
 
-  const isAuth = !!localStorage.getItem("siraj_token");
+  const isAuth =
+    !!localStorage.getItem("siraj_token");
 
   const showWorkspace =
     location.pathname.includes("/chat") ||
     location.pathname.includes("/dashboard");
 
   const logout = () => {
+
     localStorage.removeItem("siraj_token");
+
     localStorage.removeItem("siraj_user");
-    navigate("/login", { replace: true });
+
+    navigate("/login", {
+      replace: true,
+    });
   };
 
-  const active = (path) => location.pathname.includes(path);
+  const navItem = (
+    to,
+    label,
+    icon,
+  ) => {
+
+    const Icon = icon;
+
+    const active =
+      location.pathname === to;
+
+    return (
+      <Link
+        to={to}
+        className={`
+          flex items-center gap-2
+          px-4 py-2 rounded-2xl
+          text-sm font-medium
+          transition-all duration-300
+
+          ${
+            active
+              ? `
+                bg-white
+                text-slate-900
+                shadow-[0_8px_30px_rgba(15,23,42,0.06)]
+              `
+              : `
+                text-slate-500
+                hover:text-slate-900
+                hover:bg-white/70
+              `
+          }
+        `}
+      >
+
+        <Icon size={16} />
+
+        {label}
+
+      </Link>
+    );
+  };
 
   return (
     <header className="
-      sticky top-0 z-50 w-full h-16
-      border-b border-white/10
-      bg-[#07111F]/40 backdrop-blur-2xl
-      flex items-center justify-between
-      px-4 md:px-6
+      sticky top-0 z-50
+      backdrop-blur-2xl
+      border-b border-slate-200/60
+      bg-white/70
     ">
 
-      {/* LEFT */}
-      <div className="flex items-center gap-3">
-
-        {/* MOBILE SIDEBAR BUTTON */}
-        {showWorkspace && (
-          <button
-            onClick={openSidebar}
-            className="
-              lg:hidden w-10 h-10 rounded-2xl
-              bg-white/[0.05] border border-white/10
-              flex items-center justify-center
-              hover:bg-white/[0.08]
-              active:scale-95 transition
-            "
-          >
-            <Menu size={18} />
-          </button>
-        )}
-
-        {/* LOGO */}
-        <Link to="/" className="flex items-center gap-2 text-yellow-400 font-bold tracking-[0.25em] text-sm">
-          <div className="w-8 h-8 rounded-xl bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center">
-            <Sparkles size={14} />
-          </div>
-          <span>SIRAJ</span>
-        </Link>
-
-      </div>
-
-      {/* CENTER NAV */}
       <div className="
-        hidden md:flex items-center gap-2
-        bg-white/[0.03] border border-white/10
-        rounded-2xl px-2 py-2
-        backdrop-blur-xl
+        max-w-7xl mx-auto
+        px-4 lg:px-8
+        h-20
+        flex items-center justify-between
       ">
 
-        <Link to="/features" className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm text-gray-400 hover:text-white hover:bg-white/[0.05] transition">
-          <Gem size={14} /> Features
-        </Link>
+        {/* LEFT */}
+        <div className="flex items-center gap-3">
 
-        <Link to="/pricing" className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm text-gray-400 hover:text-white hover:bg-white/[0.05] transition">
-          <Zap size={14} /> Pricing
-        </Link>
-
-        <Link to="/docs" className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm text-gray-400 hover:text-white hover:bg-white/[0.05] transition">
-          <FileText size={14} /> Docs
-        </Link>
-
-        {isAuth && (
-          <>
-            <Link
-              to="/chat"
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition
-                ${active("/chat")
-                  ? "bg-yellow-400 text-black font-semibold shadow-[0_0_25px_rgba(255,215,0,0.35)]"
-                  : "text-gray-400 hover:text-white hover:bg-white/[0.05]"}
-              `}
+          {/* MOBILE */}
+          {showWorkspace && (
+            <button
+              onClick={openSidebar}
+              className="
+                lg:hidden
+                w-11 h-11 rounded-2xl
+                bg-white
+                border border-slate-200
+                flex items-center justify-center
+                text-slate-700
+              "
             >
-              <MessageSquare size={14} /> Chat
-            </Link>
+              <Menu size={18} />
+            </button>
+          )}
 
-            <Link
-              to="/dashboard"
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition
-                ${active("/dashboard")
-                  ? "bg-yellow-400 text-black font-semibold shadow-[0_0_25px_rgba(255,215,0,0.35)]"
-                  : "text-gray-400 hover:text-white hover:bg-white/[0.05]"}
-              `}
-            >
-              <LayoutDashboard size={14} /> Dashboard
-            </Link>
-          </>
-        )}
+          {/* LOGO */}
+          <Link
+            to="/"
+            className="flex items-center gap-3"
+          >
 
-      </div>
+            <div className="
+              relative
+              w-11 h-11 rounded-2xl
+              bg-gradient-to-br
+              from-blue-600 to-cyan-500
+              flex items-center justify-center
+              text-[var(--text)]
+              shadow-[0_12px_30px_rgba(37,99,235,0.25)]
+            ">
 
-      {/* RIGHT */}
-      <div className="flex items-center gap-3">
+              <Sparkles size={18} />
 
-        {/* STATUS */}
-        {isAuth && (
-          <div className="
-            hidden lg:flex items-center gap-2
-            px-3 py-2 rounded-xl
-            border border-white/10
-            bg-white/[0.03]
-          ">
-            <div className="relative">
-              <div className="w-2 h-2 rounded-full bg-green-400" />
-              <div className="absolute inset-0 w-2 h-2 rounded-full bg-green-400 animate-ping" />
             </div>
 
-            <span className="text-xs text-gray-300 flex items-center gap-1">
-              <Wifi size={12} /> AI Online
-            </span>
-          </div>
-        )}
+            <div>
 
-        {/* AUTH */}
-        {!isAuth ? (
-          <Link
-            to="/login"
-            className="
-              px-4 py-2 rounded-xl
-              bg-yellow-400 text-black
-              text-sm font-semibold
-              hover:scale-105 active:scale-95 transition
-              shadow-[0_0_25px_rgba(255,215,0,0.35)]
-            "
-          >
-            Launch App
+              <div className="
+                text-sm font-black
+                tracking-[0.35em]
+                text-slate-900
+              ">
+                SIRAJ
+              </div>
+
+              <div className="
+                text-[11px]
+                text-slate-400
+                mt-0.5
+              ">
+                Autonomous Intelligence
+              </div>
+
+            </div>
+
           </Link>
-        ) : (
-          <button
-            onClick={logout}
-            className="
-              flex items-center gap-2
-              px-4 py-2 rounded-xl
-              text-red-400 text-sm
-              border border-red-500/20
-              bg-red-500/5
-              hover:bg-red-500/10
-              transition
-            "
-          >
-            <LogOut size={14} />
-            Logout
-          </button>
-        )}
+
+        </div>
+
+        {/* CENTER */}
+        <div className="
+          hidden lg:flex
+          items-center gap-2
+          p-1.5 rounded-[22px]
+          bg-slate-100/70
+          border border-slate-200/60
+        ">
+
+          {navItem(
+            "/features",
+            "Features",
+            Blocks,
+          )}
+
+          {navItem(
+            "/pricing",
+            "Pricing",
+            CreditCard,
+          )}
+
+          {navItem(
+            "/docs",
+            "Docs",
+            FileText,
+          )}
+
+          {isAuth && (
+            <>
+              {navItem(
+                "/chat",
+                "Workspace",
+                MessageSquare,
+              )}
+
+              {navItem(
+                "/dashboard",
+                "Dashboard",
+                LayoutDashboard,
+              )}
+            </>
+          )}
+
+        </div>
+
+        {/* RIGHT */}
+        <div className="flex items-center gap-3">
+
+          {!isAuth ? (
+            <Link to="/login">
+
+              <PrimaryButton>
+
+                <div className="
+                  flex items-center gap-2
+                ">
+
+                  Launch Platform
+
+                  <ArrowRight size={16} />
+
+                </div>
+
+              </PrimaryButton>
+
+            </Link>
+          ) : (
+            <button
+              onClick={logout}
+              className="
+                flex items-center gap-2
+                px-4 py-3 rounded-2xl
+                bg-white
+                border border-slate-200
+                text-slate-600
+                hover:text-red-500
+                transition-all
+              "
+            >
+
+              <LogOut size={16} />
+
+              Logout
+
+            </button>
+          )}
+
+        </div>
 
       </div>
 

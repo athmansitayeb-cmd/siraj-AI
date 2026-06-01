@@ -1,6 +1,6 @@
 import { io } from "socket.io-client";
 
-const token = localStorage.getItem("siraj_token");
+const getToken = () => localStorage.getItem("siraj_token");
 
 export const socket = io("https://siraj.software", {
   path: "/socket.io",
@@ -8,10 +8,7 @@ export const socket = io("https://siraj.software", {
   autoConnect: true,
   reconnection: true,
   reconnectionAttempts: 5,
-
-  ...(token
-    ? {
-        auth: { token }
-      }
-    : {})
+  auth: {
+    token: getToken()
+  }
 });

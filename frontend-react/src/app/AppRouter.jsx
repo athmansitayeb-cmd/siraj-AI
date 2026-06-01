@@ -1,64 +1,52 @@
-import { Routes, Route, Navigate } from "react-router-dom";
-import MainLayout from "../layout/MainLayout";
+import { Routes, Route } from "react-router-dom";
 
 import LandingPage from "../pages/LandingPage";
-import About from "../pages/About";
+import AI from "../pages/AI";
 import Features from "../pages/Features";
 import Pricing from "../pages/Pricing";
 import Docs from "../pages/Docs";
-import AI from "../pages/AI";
-import Platform from "../pages/Platform";
-
-import Dashboard from "../pages/Dashboard";
-import Chat from "../pages/Chat";
-import Upgrade from "../pages/Upgrade";
 
 import Login from "../pages/Login";
 import Register from "../pages/Register";
-import ForgotPassword from "../pages/ForgotPassword";
-import ResetPassword from "../pages/ResetPassword";
 
-const isAuth = () => !!localStorage.getItem("siraj_token");
+import Dashboard from "../pages/Dashboard";
+import IntentCapture from "../pages/IntentCapture";
+import Chat from "../pages/Chat";
+import AppLayout from "../layouts/AppLayout";
+import MarketingLayout from "../layouts/marketing";
 
-const Protected = ({ children }) =>
-  isAuth() ? children : <Navigate to="/login" replace />;
-
-const GuestOnly = ({ children }) =>
-  !isAuth() ? children : <Navigate to="/dashboard" replace />;
+import { ProtectedRoute, GuestRoute } from "../auth/ProtectedRoute";
 
 export default function AppRouter() {
   return (
     <Routes>
 
-      {/* PUBLIC */}
-      <Route element={<MainLayout />}>
+      {/* ================= PUBLIC ================= */}
+      <Route element={<MarketingLayout />}>
         <Route path="/" element={<LandingPage />} />
-        <Route path="/about" element={<About />} />
+        <Route path="/ai" element={<AI />} />
         <Route path="/features" element={<Features />} />
         <Route path="/pricing" element={<Pricing />} />
         <Route path="/docs" element={<Docs />} />
-        <Route path="/ai" element={<AI />} />
-        <Route path="/platform" element={<Platform />} />
-        <Route path="/try" element={<Chat />} />
       </Route>
 
-      {/* AUTH */}
-      <Route path="/login" element={<GuestOnly><Login /></GuestOnly>} />
-      <Route path="/register" element={<GuestOnly><Register /></GuestOnly>} />
-
-      {/* APP */}
-      <Route element={<Protected><MainLayout /></Protected>}>
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/chat" element={<Chat />} />
-        <Route path="/upgrade" element={<Upgrade />} />
+      {/* ================= AUTH ================= */}
+      <Route element={<GuestRoute />}>
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
       </Route>
 
-      {/* PASSWORD */}
-      <Route path="/forgot-password" element={<ForgotPassword />} />
-      <Route path="/reset-password/:token" element={<ResetPassword />} />
+      {/* ================= APP ================= */}
+      <Route element={<ProtectedRoute />}>
+        <Route element={<AppLayout />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/intent" element={<IntentCapture />} />
+          <Route path="/chat/:workspaceId" element={<Chat />} />
+        </Route>
+      </Route>
 
-      {/* 404 */}
-      <Route path="*" element={<div className="p-10 text-white">404</div>} />
+      {/* ================= FALLBACK ================= */}
+      <Route path="*" element={<div>404</div>} />
 
     </Routes>
   );

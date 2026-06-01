@@ -1,107 +1,223 @@
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
+import {
+  Sparkles,
+  ArrowRight,
+  BrainCircuit,
+  Workflow,
+  Blocks,
+  ShieldCheck,
+  Cpu,
+  Globe,
+} from "lucide-react";
+
+import {
+  Card,
+  PrimaryButton,
+} from "../components/ui/primitives";
+
+import { containers } from "../design/tokens";
+import { heading, text } from "../design/typography";
 
 export default function LandingPage() {
+  const { isAuthenticated = false } = useAuth() || {};
+  const navigate = useNavigate();
+
+  const features = [
+    {
+      icon: BrainCircuit,
+      title: "Reasoning Engine",
+      desc: "Multi-layer cognitive orchestration designed for autonomous reasoning and execution.",
+    },
+    {
+      icon: Workflow,
+      title: "Agent Runtime",
+      desc: "AI agents capable of planning, delegation, execution, and reflection.",
+    },
+    {
+      icon: Blocks,
+      title: "Memory Infrastructure",
+      desc: "Persistent memory enabling continuity and long-term intelligence.",
+    },
+    {
+      icon: ShieldCheck,
+      title: "Runtime Governance",
+      desc: "Built-in safeguards, permissions, and execution control layers.",
+    },
+  ];
+
   return (
-    <>
-      <div className="relative min-h-screen bg-[#07111F] text-white overflow-hidden">
+    <div className="relative overflow-hidden">
 
-        {/* Background glow */}
-        <div className="absolute inset-0">
-          <div className="absolute w-[600px] h-[600px] bg-yellow-400/10 blur-[160px] rounded-full top-[-200px] left-[-200px]" />
-          <div className="absolute w-[500px] h-[500px] bg-blue-500/10 blur-[180px] rounded-full bottom-[-200px] right-[-200px]" />
-        </div>
+      {/* BACKGROUND */}
+<div className="absolute top-0 left-0 w-[700px] h-[700px] bg-blue-400/10 blur-[120px] rounded-full pointer-events-none" />
 
-        {/* NAV */}
+<div className="absolute right-0 top-[10%] w-[600px] h-[600px] bg-cyan-300/10 blur-[120px] rounded-full pointer-events-none" />
 
-        {/* HERO */}
-        <main className="relative z-10 flex flex-col items-center justify-center text-center px-6 pt-24">
+      {/* HERO */}
+      <div className={containers.page}>
 
-          <motion.h1
-            initial={{ opacity: 0, y: 20 }}
+        <div className="max-w-5xl mx-auto text-center">
+
+          {/* BADGE */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-5xl md:text-7xl font-bold leading-tight max-w-4xl"
           >
-            Build intelligent systems with{" "}
-            <span className="text-yellow-400">SIRAJ AI</span>
+            <div className="inline-flex items-center gap-2 px-4 py-2 glass rounded-full">
+              <Sparkles size={14} />
+              <span className="text-sm text-muted">
+                Autonomous AI Infrastructure
+              </span>
+            </div>
+          </motion.div>
+
+          {/* TITLE */}
+          <motion.h1
+            initial={{ opacity: 0, y: 25 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className={`${heading.hero} mt-8`}
+          >
+            Build AI systems
+            <br />
+            <span className="bg-gradient-to-r from-blue-600 via-cyan-500 to-blue-400 bg-clip-text text-transparent">
+              that reason, execute, evolve
+            </span>
           </motion.h1>
 
-          <p className="mt-6 text-gray-400 max-w-2xl text-lg">
-            A modern AI automation platform designed to think, execute, and scale workflows intelligently across your applications.
-          </p>
+          {/* SUBTITLE */}
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className={`${text.body} max-w-3xl mx-auto mt-6`}
+          >
+            SIRAJ is an autonomous AI runtime for orchestrating agents,
+            memory systems, and scalable intelligent workflows.
+          </motion.p>
 
-          {/* CTA */}
-          <div className="mt-10 flex gap-4">
-            <Link
-              to="/try"
-              className="px-6 py-3 bg-yellow-400 text-black font-semibold rounded-xl hover:scale-105 transition"
-            >
-              Start Free
-            </Link>
+{/* CTA */}
+<motion.div
+  initial={{ opacity: 0, y: 20 }}
+  animate={{ opacity: 1, y: 0 }}
+  transition={{ delay: 0.3 }}
+  className="mt-10 flex flex-col sm:flex-row justify-center gap-4"
+>
 
-            <Link
-              to="/features"
-              className="px-6 py-3 border border-white/20 rounded-xl hover:bg-white/10 transition"
-            >
-              View Features
-            </Link>
-          </div>
+  <button
+    onClick={() => {
+       navigate(isAuthenticated ? "/dashboard" : "/login");
+     }}
+    className="
+      px-6 py-3 rounded-2xl
+      bg-gradient-to-r from-blue-600 to-cyan-500
+      text-white font-semibold
+      shadow-[0_10px_30px_rgba(37,99,235,0.25)]
+      hover:scale-[1.02]
+      active:scale-[0.98]
+      transition-all duration-300
+      cursor-pointer
+    "
+  >
+    Launch Workspace
+  </button>
+
+  <button
+    onClick={() => window.location.href = "/platform"}
+    className="
+      px-6 py-3 rounded-xl
+      border border-slate-200/20
+      text-sm text-white
+      hover:bg-white/10
+      transition
+      cursor-pointer
+    "
+  >
+    Explore Platform
+  </button>
+
+</motion.div>
 
           {/* TRUST LINE */}
-          <p className="mt-8 text-xs text-gray-600">
-            Trusted by developers building AI workflows & automation systems
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+            className="mt-14 flex flex-wrap justify-center gap-8 text-sm text-muted"
+          >
+            <div className="flex items-center gap-2">
+              <Cpu size={16} />
+              Multi-Agent Runtime
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Globe size={16} />
+              Scalable Infrastructure
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Sparkles size={16} />
+              Persistent Intelligence
+            </div>
+          </motion.div>
+
+        </div>
+      </div>
+
+      {/* FEATURES */}
+      <div className={containers.page}>
+
+        <div className="max-w-3xl">
+          <div className="text-sm text-muted tracking-[0.2em]">
+            CORE CAPABILITIES
+          </div>
+
+          <h2 className={`${heading.section} mt-4`}>
+            Infrastructure for autonomous intelligence
+          </h2>
+
+          <p className={`${text.body} mt-6`}>
+            SIRAJ unifies runtime orchestration, reasoning, memory systems,
+            and execution pipelines into one AI platform.
           </p>
+        </div>
 
-          {/* DEMO BOX */}
-          <div className="mt-16 w-full max-w-4xl">
-            <div className="border border-white/10 rounded-2xl p-6 bg-white/5 backdrop-blur">
+        <div className="grid md:grid-cols-2 gap-6 mt-14">
+          {features.map((f, i) => {
+            const Icon = f.icon;
 
-              <div className="text-left text-sm text-gray-400 mb-3">
-                Live AI Preview
-              </div>
+            return (
+              <motion.div
+                key={f.title}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.08 }}
+              >
+                <Card className="p-8 h-full">
 
-              <div className="h-40 flex items-center justify-center text-gray-500 text-sm">
-                AI Demo Interface (Coming Soon)
-              </div>
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center text-white">
+                    <Icon size={22} />
+                  </div>
 
-            </div>
-          </div>
+                  <h3 className="text-xl font-semibold mt-6">
+                    {f.title}
+                  </h3>
 
-          {/* FEATURES GRID */}
-          <div className="mt-20 grid md:grid-cols-3 gap-6 max-w-5xl w-full">
+                  <p className={`${text.body} mt-3`}>
+                    {f.desc}
+                  </p>
 
-            <div className="border border-white/10 p-6 rounded-xl bg-white/5">
-              <h3 className="text-white font-semibold mb-2">AI Automation</h3>
-              <p className="text-gray-400 text-sm">
-                Automate workflows and reduce manual operations using intelligent agents.
-              </p>
-            </div>
-
-            <div className="border border-white/10 p-6 rounded-xl bg-white/5">
-              <h3 className="text-white font-semibold mb-2">Smart Reasoning</h3>
-              <p className="text-gray-400 text-sm">
-                Context-aware AI that understands user intent and adapts dynamically.
-              </p>
-            </div>
-
-            <div className="border border-white/10 p-6 rounded-xl bg-white/5">
-              <h3 className="text-white font-semibold mb-2">API Ready</h3>
-              <p className="text-gray-400 text-sm">
-                Easily integrate SIRAJ into your apps, dashboards, and backend systems.
-              </p>
-            </div>
-
-          </div>
-
-        </main>
-
-        {/* FOOTER */}
-        <footer className="relative z-10 mt-24 text-center text-xs text-gray-600 py-8 border-t border-white/10">
-          © {new Date().getFullYear()} SIRAJ AI — Built for intelligent automation
-        </footer>
+                </Card>
+              </motion.div>
+            );
+          })}
+        </div>
 
       </div>
-    </>
+    </div>
   );
 }

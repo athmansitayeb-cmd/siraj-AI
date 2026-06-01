@@ -1,0 +1,16 @@
+{
+  "name": "SIRAJ AI",
+  "short_name": "SIRAJ",
+  "description": "Intelligent AI Automation Platform",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#05070F",
+  "theme_color": "#05070F",
+  "icons": [
+    {
+      "src": "/brand/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
