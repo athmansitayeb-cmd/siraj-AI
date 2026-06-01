@@ -25,28 +25,28 @@ export default function LandingPage() {
   const { isAuthenticated = false } = useAuth() || {};
   const navigate = useNavigate();
 
-  const features = [
-    {
-      icon: BrainCircuit,
-      title: "Reasoning Engine",
-      desc: "Multi-layer cognitive orchestration designed for autonomous reasoning and execution.",
-    },
-    {
-      icon: Workflow,
-      title: "Agent Runtime",
-      desc: "AI agents capable of planning, delegation, execution, and reflection.",
-    },
-    {
-      icon: Blocks,
-      title: "Memory Infrastructure",
-      desc: "Persistent memory enabling continuity and long-term intelligence.",
-    },
-    {
-      icon: ShieldCheck,
-      title: "Runtime Governance",
-      desc: "Built-in safeguards, permissions, and execution control layers.",
-    },
-  ];
+const features = [
+  {
+    icon: BrainCircuit,
+    title: "AI Agents",
+    desc: "Create intelligent agents that understand goals and execute tasks."
+  },
+  {
+    icon: Workflow,
+    title: "Workflow Automation",
+    desc: "Automate repetitive processes using structured AI workflows."
+  },
+  {
+    icon: Blocks,
+    title: "Persistent Memory",
+    desc: "Keep context, workspace knowledge, and task history across sessions."
+  },
+  {
+    icon: ShieldCheck,
+    title: "Execution Control",
+    desc: "Monitor, manage, and control how agents perform actions."
+  }
+];
 
   return (
     <div className="relative overflow-hidden">
@@ -69,7 +69,7 @@ export default function LandingPage() {
             <div className="inline-flex items-center gap-2 px-4 py-2 glass rounded-full">
               <Sparkles size={14} />
               <span className="text-sm text-muted">
-                Autonomous AI Infrastructure
+                AI Agent Platform
               </span>
             </div>
           </motion.div>
@@ -81,10 +81,10 @@ export default function LandingPage() {
             transition={{ delay: 0.1 }}
             className={`${heading.hero} mt-8`}
           >
-            Build AI systems
+            Build AI Agents
             <br />
             <span className="bg-gradient-to-r from-blue-600 via-cyan-500 to-blue-400 bg-clip-text text-transparent">
-              that reason, execute, evolve
+              That Automate Real Work
             </span>
           </motion.h1>
 
@@ -95,8 +95,10 @@ export default function LandingPage() {
             transition={{ delay: 0.2 }}
             className={`${text.body} max-w-3xl mx-auto mt-6`}
           >
-            SIRAJ is an autonomous AI runtime for orchestrating agents,
-            memory systems, and scalable intelligent workflows.
+            SIRAJ is an AI agent platform that helps you build,
+            run, and manage agents that automate tasks,
+            execute workflows, and use memory to get work done.
+
           </motion.p>
 
 {/* CTA */}
@@ -150,17 +152,17 @@ export default function LandingPage() {
           >
             <div className="flex items-center gap-2">
               <Cpu size={16} />
-              Multi-Agent Runtime
+              AI Agents
             </div>
 
             <div className="flex items-center gap-2">
               <Globe size={16} />
-              Scalable Infrastructure
+              Workflow Automation
             </div>
 
             <div className="flex items-center gap-2">
               <Sparkles size={16} />
-              Persistent Intelligence
+              Persistent Memory
             </div>
           </motion.div>
 
@@ -176,18 +178,46 @@ export default function LandingPage() {
           </div>
 
           <h2 className={`${heading.section} mt-4`}>
-            Infrastructure for autonomous intelligence
+            Everything You Need to Build AI Agents
           </h2>
 
           <p className={`${text.body} mt-6`}>
-            SIRAJ unifies runtime orchestration, reasoning, memory systems,
-            and execution pipelines into one AI platform.
+            Build agents with memory, automate workflows,
+            connect tools, and execute tasks from a single platform.
           </p>
         </div>
 
         <div className="grid md:grid-cols-2 gap-6 mt-14">
           {features.map((f, i) => {
             const Icon = f.icon;
+
+<div className="max-w-4xl mx-auto mt-24">
+  <Card className="p-12 text-center">
+
+    <h2 className="text-4xl font-bold mb-4">
+      Start Building Today
+    </h2>
+
+    <p className="text-muted max-w-2xl mx-auto mb-8">
+      Create your first AI agent, automate tasks,
+      and turn ideas into execution with SIRAJ.
+    </p>
+
+    <button
+      onClick={() =>
+        navigate(isAuthenticated ? "/dashboard" : "/register")
+      }
+      className="
+        px-6 py-3 rounded-2xl
+        bg-gradient-to-r from-blue-600 to-cyan-500
+        text-white font-semibold
+      "
+    >
+      Create Your Agent
+    </button>
+
+  </Card>
+</div>
 
             return (
               <motion.div

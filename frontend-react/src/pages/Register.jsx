@@ -40,27 +40,25 @@ export default function Register() {
           <div className="absolute w-[600px] h-[600px] bg-yellow-400/10 blur-[160px] rounded-full top-[-200px] left-[-200px] animate-pulse" />
           <div className="absolute w-[500px] h-[500px] bg-purple-500/10 blur-[160px] rounded-full bottom-[-200px] right-[-200px] animate-pulse" />
 
-          <motion.h1
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-6xl font-extrabold leading-tight tracking-tight"
-          >
-            Join SIRAJ
-          </motion.h1>
+<motion.h1
+  initial={{ opacity: 0, y: 40 }}
+  animate={{ opacity: 1, y: 0 }}
+  className="text-6xl font-extrabold leading-tight tracking-tight"
+>
+  Join SIRAJ
+</motion.h1>
 
-          <p className="mt-6 text-lg text-gray-400 max-w-md leading-relaxed">
-            Not just registration.  
-            <br />
-            <span className="text-yellow-400">
-              It’s the start of clarity.
-            </span>
-          </p>
+<p className="mt-6 text-lg text-gray-400 max-w-md leading-relaxed">
+  Start building AI agents that automate tasks,
+  execute workflows, and manage real work.
+</p>
 
-          <div className="mt-10 space-y-3 text-sm text-gray-500">
-            <p>⚡ AI that understands your state</p>
-            <p>🧠 Context-aware guidance system</p>
-            <p>🎯 Focused execution mindset</p>
-          </div>
+<div className="mt-10 space-y-3 text-sm text-gray-500">
+  <p>⚡ Create AI agents</p>
+  <p>🧠 Persistent memory</p>
+  <p>🔄 Workflow automation</p>
+  <p>🚀 Real-time execution</p>
+</div>
         </div>
 
         {/* RIGHT SIDE */}
@@ -79,7 +77,7 @@ export default function Register() {
             </h2>
 
             <p className="text-center text-gray-400 text-sm mb-6">
-              Start your journey with SIRAJ
+              Create your workspace and start building AI agents
             </p>
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

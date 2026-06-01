@@ -1,14 +1,10 @@
 import { useState, useEffect } from "react";
-import { Sparkles, BrainCircuit, Check, Rocket, Shield } from "lucide-react";
+import { PLANS } from "../config/plans";
 import { trackEvent } from "../analytics";
 
-import {
-  Section,
-  Card,
-  PrimaryButton,
-} from "../components/ui/primitives";
-
+import { Section, Card, PrimaryButton } from "../components/ui/primitives";
 import { heading, text } from "../design/typography";
+import { Sparkles } from "lucide-react";
 
 export default function Upgrade() {
   const [loading, setLoading] = useState(false);
@@ -20,12 +16,6 @@ export default function Upgrade() {
   const upgrade = async (plan) => {
     try {
       setLoading(true);
-
-      trackEvent("start_checkout", {
-        plan,
-        currency: "USD",
-        value: plan === "pro_yearly" ? 40 : 5,
-      });
 
       const token = localStorage.getItem("siraj_token");
 
@@ -46,87 +36,64 @@ export default function Upgrade() {
       if (data?.approveLink) {
         window.location.href = data.approveLink;
       }
-    } catch (err) {
-      console.error("Upgrade error:", err);
     } finally {
       setLoading(false);
     }
   };
 
-  const features = [
-    "Persistent memory system",
-    "Adaptive guidance",
-    "Long-term continuity",
-    "Priority runtime access",
-    "Advanced orchestration",
-    "Deeper reasoning",
-  ];
-
   return (
     <Section>
+
       {/* HEADER */}
       <div className="text-center max-w-3xl mx-auto mb-16">
         <div className="inline-flex items-center gap-2 mb-6">
           <Sparkles size={16} className="text-blue-500" />
-          <span className={text.small}>SIRAJ PRO</span>
+          <span className={text.small}>SIRAJ PLANS</span>
         </div>
 
-        <h1 className={heading.section}>Upgrade to PRO</h1>
+        <h1 className={heading.section}>Upgrade your system</h1>
 
         <p className={`${text.body} mt-6`}>
-          Persistent intelligence, memory and adaptive reasoning across workflows.
+          Same platform. Higher intelligence level.
         </p>
       </div>
 
       {/* GRID */}
-      <div className="grid lg:grid-cols-2 gap-8">
-        {/* FEATURES */}
-        <Card className="p-8">
-          <div className="flex items-center gap-3 mb-6">
-            <BrainCircuit className="text-blue-500" />
-            <h2 className="text-xl font-semibold">Capabilities</h2>
-          </div>
+      <div className="grid lg:grid-cols-4 gap-6">
 
-          <div className="space-y-4">
-            {features.map((f) => (
-              <div key={f} className="flex gap-3">
-                <Check className="text-green-500" size={18} />
-                <span className={text.muted}>{f}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
+        {Object.values(PLANS).map((plan) => (
+          <Card
+            key={plan.id}
+            className={`p-6 ${
+              plan.popular ? "border border-blue-500/40" : ""
+            }`}
+          >
+            <div className="mb-4 font-semibold">
+              {plan.title}
+            </div>
 
-        {/* ACTION */}
-        <Card className="p-8">
-          <div className="flex items-center gap-3 mb-6">
-            <Rocket className="text-blue-500" />
-            <h2 className="text-xl font-semibold">Plans</h2>
-          </div>
+            <div className="text-3xl font-black mb-4">
+              {plan.price === null ? "Custom" : `$${plan.price}`}
+            </div>
 
-          <div className="space-y-4">
-            <PrimaryButton
-              disabled={loading}
-              onClick={() => upgrade("pro_monthly")}
-              className="w-full"
-            >
-              Monthly $5
-            </PrimaryButton>
+            <div className="space-y-2 text-sm mb-6 text-muted">
+              {plan.features.slice(0, 3).map((f) => (
+                <div key={f}>• {f}</div>
+              ))}
+            </div>
 
-            <PrimaryButton
-              disabled={loading}
-              onClick={() => upgrade("pro_yearly")}
-              className="w-full opacity-90"
-            >
-              Yearly $40
-            </PrimaryButton>
-          </div>
+            {plan.id !== "free" && (
+              <PrimaryButton
+                disabled={loading}
+                onClick={() => upgrade(plan.id)}
+                className="w-full"
+              >
+                Select
+              </PrimaryButton>
+            )}
+          </Card>
+        ))}
 
-          <div className="mt-6 flex gap-2 items-center text-sm text-slate-500">
-            <Shield size={16} />
-            Secure PayPal subscription
-          </div>
-        </Card>
       </div>
     </Section>
   );

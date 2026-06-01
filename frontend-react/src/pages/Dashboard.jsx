@@ -14,44 +14,44 @@ import {
 
 export default function Dashboard() {
 
-  const stats = [
-    {
-      title: "Memory Layer",
-      value: "Persistent",
-      icon: Layers3,
-      desc: "Long-term contextual continuity enabled.",
-    },
-    {
-      title: "Agent Runtime",
-      value: "Active",
-      icon: Cpu,
-      desc: "Multi-agent orchestration operational.",
-    },
-    {
-      title: "System Health",
-      value: "Stable",
-      icon: Activity,
-      desc: "Runtime latency and pipelines healthy.",
-    },
-  ];
+const stats = [
+  {
+    title: "AI Agents",
+    value: "Ready",
+    icon: Brain,
+    desc: "Create and deploy intelligent agents."
+  },
+  {
+    title: "Memory",
+    value: "Active",
+    icon: Layers3,
+    desc: "Persistent context across sessions."
+  },
+  {
+    title: "Workspaces",
+    value: "Online",
+    icon: Workflow,
+    desc: "Dedicated environments for every agent."
+  }
+];
 
-  const modules = [
-    {
-      title: "Workspace Runtime",
-      icon: Workflow,
-      desc: "Manage active orchestration flows.",
-    },
-    {
-      title: "AI Infrastructure",
-      icon: Brain,
-      desc: "Scale execution systems and memory.",
-    },
-    {
-      title: "Security Layer",
-      icon: ShieldCheck,
-      desc: "Protected runtime authentication.",
-    },
-  ];
+const modules = [
+  {
+    title: "Agent Builder",
+    icon: Brain,
+    desc: "Create and configure AI agents."
+  },
+  {
+    title: "Workspaces",
+    icon: Workflow,
+    desc: "Organize tasks and agent activities."
+  },
+  {
+    title: "Security",
+    icon: ShieldCheck,
+    desc: "Manage authentication and permissions."
+  }
+];
 
   return (
     <div className="relative min-h-screen px-6 py-12 max-w-7xl mx-auto">
@@ -76,19 +76,19 @@ export default function Dashboard() {
             <div className="inline-flex items-center gap-2 glass px-4 py-2 mb-6">
               <Sparkles size={15} className="text-[var(--primary)]" />
               <span className="text-sm text-muted">
-                Enterprise Runtime Engine
+                AI Agent Platform
               </span>
             </div>
 
             <h1 className="text-5xl md:text-6xl font-black tracking-tight leading-[1.05] mb-6">
-              Autonomous AI
+              Manage Your
               <br />
-              Infrastructure
+              AI Agents
             </h1>
 
             <p className="text-lg text-muted leading-relaxed max-w-2xl">
-              SIRAJ orchestrates intelligent agents, memory systems and autonomous
-              workflows inside one scalable runtime environment.
+              Create, manage, and run AI agents that automate tasks,
+              execute workflows, and help you get work done.
             </p>
           </div>
 
@@ -97,9 +97,9 @@ export default function Dashboard() {
             <div className="flex items-center justify-between mb-6">
               <div>
                 <div className="text-xs tracking-[0.25em] text-faint mb-2">
-                  RUNTIME STATUS
+                  PLATFORM STATUS
                 </div>
-                <h3 className="text-2xl font-bold">Operational</h3>
+                <h3 className="text-2xl font-bold">Ready</h3>
               </div>
 
               <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-blue-50 text-[var(--primary)]">
@@ -109,17 +109,17 @@ export default function Dashboard() {
 
             <div className="space-y-4 text-sm">
               <div className="flex justify-between">
-                <span className="text-muted">Agent Runtime</span>
+                <span className="text-muted">AI Agents</span>
                 <span className="text-green-600 font-medium">Online</span>
               </div>
 
               <div className="flex justify-between">
-                <span className="text-muted">Memory System</span>
+                <span className="text-muted">Memory</span>
                 <span className="text-green-600 font-medium">Synced</span>
               </div>
 
               <div className="flex justify-between">
-                <span className="text-muted">Neural Pipeline</span>
+                <span className="text-muted">Workspaces</span>
                 <span className="text-green-600 font-medium">Stable</span>
               </div>
             </div>
@@ -169,10 +169,10 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-8">
             <div>
               <div className="text-xs tracking-[0.25em] text-faint mb-2">
-                SYSTEM MODULES
+                PLATFORM TOOLS
               </div>
               <h2 className="text-3xl font-bold">
-                Runtime Capabilities
+               Build and Manage Agents
               </h2>
             </div>
 
@@ -225,11 +225,11 @@ export default function Dashboard() {
             </div>
 
             <h3 className="text-2xl font-bold mb-3">
-              Open AI Runtime
+              Open Workspace
             </h3>
 
             <p className="text-muted leading-relaxed">
-              Continue interacting with your autonomous orchestration environment.
+              Continue working with your AI agents and active workflows.
             </p>
           </Link>
 
@@ -249,11 +249,11 @@ export default function Dashboard() {
             </div>
 
             <h3 className="text-2xl font-bold mb-3">
-              Upgrade Infrastructure
+              Upgrade Plan
             </h3>
 
             <p className="text-muted leading-relaxed">
-              Unlock advanced runtime execution, persistent memory and enterprise scaling.
+              Unlock more agents, larger memory, advanced automation and premium features.
             </p>
           </Link>
         </div>

@@ -1,22 +1,22 @@
 export const seo = {
   home: {
-    title: "SIRAJ — Autonomous AI Intent & Workflow Engine",
+    title: "SIRAJ — Build AI Agents That Automate Workflows",
     description:
-      "SIRAJ is an advanced AI orchestration platform that converts human intent into autonomous workflows using memory-driven agents and real-time execution workspaces.",
+      "SIRAJ is an AI agent platform that lets you build, run, and manage agents that automate tasks and execute workflows with memory and real-time control.",
 
     openGraph: {
-      title: "SIRAJ — AI Workflow Intelligence System",
+      title: "SIRAJ — Build and Run AI Agents",
       description:
-        "Transform intent into execution with SIRAJ AI orchestration engine.",
+        "Create AI agents that automate tasks, manage workflows, and execute actions in real time.",
       type: "website",
       url: "https://siraj.software"
     },
 
     twitter: {
       card: "summary_large_image",
-      title: "SIRAJ AI Platform",
+      title: "SIRAJ AI Agent Platform",
       description:
-        "Autonomous AI system for intent, memory, and workflow execution."
+        "Build AI agents that automate tasks and execute workflows."
     },
 
     jsonLd: {
@@ -26,48 +26,48 @@ export const seo = {
       applicationCategory: "AI Platform",
       operatingSystem: "Web",
       description:
-        "Autonomous AI orchestration system for intent-based workflow execution.",
+        "AI agent platform for building and running agents that automate workflows and tasks.",
       url: "https://siraj.software"
     }
   },
 
   about: {
-    title: "SIRAJ Architecture — AI Intent & Memory System",
+    title: "About SIRAJ — AI Agent Platform",
     description:
-      "SIRAJ is built on a multi-layer AI architecture combining intent parsing, workspace memory, execution runtime, and reflection loops for continuous intelligence.",
+      "SIRAJ is a platform for building AI agents that plan, execute, and manage tasks using memory and structured workflows.",
 
     openGraph: {
-      title: "About SIRAJ AI System",
+      title: "About SIRAJ",
       description:
-        "Learn how SIRAJ transforms intent into autonomous execution.",
+        "Learn how SIRAJ enables AI agents to automate real-world tasks.",
       type: "article",
       url: "https://siraj.software/about"
     }
   },
 
   features: {
-    title: "SIRAJ Features — AI Agents, Workspaces & Orchestration Engine",
+    title: "SIRAJ Features — AI Agents, Memory & Automation",
     description:
-      "Explore SIRAJ’s AI stack: intent engine, task planner, runtime executor, workspace brain, and memory graph system for autonomous workflows.",
+      "Build AI agents with memory, tools, and workflows. Run automated tasks with real-time execution inside SIRAJ.",
 
     jsonLd: {
       "@context": "https://schema.org",
       "@type": "TechArticle",
-      name: "SIRAJ Features Overview",
+      name: "SIRAJ Features",
       description:
-        "Deep breakdown of SIRAJ AI orchestration and agent architecture."
+        "AI agents, automation workflows, memory, and execution system in SIRAJ."
     }
   },
 
   intent: {
-    title: "Define Your Intent — SIRAJ AI Workspace Initialization",
+    title: "Create AI Agents from Your Goals — SIRAJ Workspace",
     description:
-      "Select your goal and SIRAJ automatically builds a dedicated AI workspace with planning, execution, and memory tracking."
+      "Turn your goal into an AI agent workspace that plans, executes, and automates tasks automatically."
   },
 
   chat: {
-    title: "AI Workspace Chat — Real-time SIRAJ Execution Engine",
+    title: "AI Agent Chat — Execute Tasks in Real Time",
     description:
-      "Chat with SIRAJ agents powered by orchestration, memory graph, and runtime execution system."
+      "Chat with AI agents that understand tasks, use tools, and execute workflows instantly."
   }
 };
