@@ -1,142 +1,118 @@
+import { getAgent } from "./agentRegistry.js";
+
 export function unifiedPlanner({
   msg,
-  memory = {},
-  workspace = {},
-  reasoning = {}
+  cognition
 }) {
 
-  const text = msg.toLowerCase();
+  console.log("===== UNIFIED PLANNER v5 =====");
 
-  // ================= INTENT =================
-  let intent = "conversation";
+  const text = String(msg || "").trim();
+  const lower = text.toLowerCase();
 
-  if (/ابحث|search|google|find/.test(text)) {
-    intent = "search";
+  const intent = cognition?.intent || "general";
+
+  // ================= SIMPLE CONVERSATION =================
+  const simpleConversation =
+    text.length < 40 &&
+    !/(build|create|generate|design|system|architecture|dashboard|api|database|backend|frontend|project|application|app)/i.test(lower);
+
+  if (simpleConversation) {
+
+    return {
+      version: "v5-conversation",
+      intent: "conversation",
+      tasks: [
+        {
+          id: "assistant_1",
+          type: "agent",
+          agent: "assistant",
+          input: text
+        },
+        {
+          id: "final_output",
+          type: "synthesis",
+          dependsOn: ["assistant_1"]
+        }
+      ]
+    };
+
   }
 
-  if (/ابني|اصنع|create|build|code/.test(text)) {
-    intent = "build";
+  // ================= SINGLE SPECIALIZED AGENT =================
+  const routing = [
+    {
+      regex: /(research|search|analyze)/i,
+      agent: "research"
+    },
+    {
+      regex: /(frontend|react|jsx|ui|page)/i,
+      agent: "frontend"
+    },
+    {
+      regex: /(backend|express|server|api|database|auth)/i,
+      agent: "backend"
+    },
+    {
+      regex: /(architecture|design|system)/i,
+      agent: "architect"
+    }
+  ];
+
+  for (const rule of routing) {
+
+    if (rule.regex.test(lower) && text.length < 120) {
+
+      if (getAgent(rule.agent)) {
+
+        return {
+          version: "v5-single-agent",
+          intent: rule.agent,
+          tasks: [
+            {
+              id: `${rule.agent}_1`,
+              type: "agent",
+              agent: rule.agent,
+              input: text
+            },
+            {
+              id: "final_output",
+              type: "synthesis",
+              dependsOn: [`${rule.agent}_1`]
+            }
+          ]
+        };
+
+      }
+
+    }
+
   }
 
-  if (/حلل|analyze/.test(text)) {
-    intent = "analysis";
-  }
-
-if (/research|بحث|analyze|study/.test(text)) {
-  intent = "research";
-}
-  // ================= GOAL =================
-  const goal =
-    reasoning?.goal ||
-    memory?.dominantGoal ||
-    msg;
-
-  const tasks = [];
-
-  // ================= PLANNER NODE (FIXED) =================
-  tasks.push({
-    id: "t0",
-    type: "reasoning",
-    role: "planner",
-    status: "pending",
-    input: goal
-  });
-
-  // ================= INTENT TASKS =================
-
-  if (intent === "search") {
-
-    tasks.push({
-      id: "t1",
-      type: "tool",
-      tool: "search",
-      status: "pending",
-      dependsOn: ["t0"],
-      input: msg
-    });
-  }
-
-if (intent === "build") {
-
-  // ================= FRONTEND =================
-  tasks.push({
-    id: "frontend_1",
-    type: "agent",
-    role: "frontend",
-    agent: "frontend",
-    status: "pending",
-    dependsOn: ["t0"],
-    input: msg
-  });
-
-  // ================= BACKEND =================
-  tasks.push({
-    id: "backend_1",
-    type: "agent",
-    role: "backend",
-    agent: "backend",
-    status: "pending",
-    dependsOn: ["frontend_1"],
-    input: msg
-  });
-
-  // ================= CRITIC =================
-  tasks.push({
-    id: "critic_1",
-    type: "agent",
-    role: "critic",
-    agent: "critic",
-    status: "pending",
-    dependsOn: [
-      "frontend_1",
-      "backend_1"
-    ],
-    input: "Validate generated app"
-  });
-
-}
-
-  if (intent === "analysis") {
-
-    tasks.push({
-      id: "t3",
-      type: "agent",
-      role: "analyst",
-      status: "pending",
-      dependsOn: ["t0"],
-      input: msg
-    });
-  }
-
-if (intent === "research") {
-
-  tasks.push({
-    id: "t4",
-    type: "agent",
-    agent: "research",
-    role: "researcher",
-    status: "pending",
-    dependsOn: ["t0"],
-    input: msg
-  });
-
-}
-
-  // ================= SYNTHESIS =================
-  tasks.push({
-    id: "t_final",
-    type: "synthesis",
-    status: "pending",
-    dependsOn: tasks.map(t => t.id)
-  });
-
+  // ================= COMPLEX PROJECT =================
   return {
-    version: "planner-v2",
-    intent,
-    goal,
-    state: "PLANNED",
-    risk: reasoning?.risk || "low",
-    tasks,
-    createdAt: Date.now()
+
+    version: "v5-planner",
+
+    intent: "complex",
+
+    tasks: [
+
+      {
+        id: "planner_1",
+        type: "agent",
+        agent: "planner",
+        input: text
+      },
+
+      {
+        id: "final_output",
+        type: "synthesis",
+        dependsOn: ["planner_1"]
+      }
+
+    ]
+
   };
+
 }

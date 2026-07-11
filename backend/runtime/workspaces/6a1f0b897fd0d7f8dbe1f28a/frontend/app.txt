@@ -1,0 +1,6 @@
+Frontend scaffold based on plan:
+{
+  "name": "frontend",
+  "type": "ui",
+  "requirements": []
+}

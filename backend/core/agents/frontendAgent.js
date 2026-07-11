@@ -1,93 +1,96 @@
 import { registerAgent } from "../agentRegistry.js";
+import { readKnowledge } from "../sharedWorkspaceBus.js";
+import { CodeAgent } from "../CodeAgent.js";
 
-// ================= FRONTEND AGENT =================
+const agent = new CodeAgent({
+  name: "frontend",
+  temperature: 0.1,
+  role: `
+You are a senior React architect.
+
+The USER REQUEST is the complete project vision.
+
+The TASK is your current responsibility.
+
+Generate ONLY the requested page.
+
+Rules:
+
+- React functional component.
+- Use hooks when needed.
+- Export default.
+- No markdown.
+- No explanations.
+`
+});
+
 registerAgent("frontend", {
 
-  description:
-    "Creates frontend UI files",
+  description: "Frontend code generator",
 
-  async execute({
-    input,
-    context
-  }) {
+  async execute({ input, context }) {
 
-    // ================= HTML =================
-    const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Login</title>
-  <link rel="stylesheet" href="./style.css">
-</head>
-<body>
+    const knowledge = context?.workspaceId
+      ? await readKnowledge(context.workspaceId)
+      : [];
 
-<form class="login-box">
-  <h1>Login</h1>
+    const latest = knowledge.at(-1)?.data || {};
 
-  <input
-    type="email"
-    placeholder="Email"
-  />
+    const plan =
+      latest ||
+      input?.dependencies?.[0]?.result ||
+      {};
 
-  <input
-    type="password"
-    placeholder="Password"
-  />
+    const pages =
+      plan.pages?.length
+        ? plan.pages
+        : ["App"];
 
-  <button>
-    Sign In
-  </button>
-</form>
+    const files = [];
 
-</body>
-</html>
-`;
+    for (const page of pages) {
 
-    // ================= CSS =================
-    const css = `
-body {
-  background: #0f172a;
-  color: white;
-  font-family: sans-serif;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100vh;
-}
+      const content = await agent.generate({
 
-.login-box {
-  width: 320px;
-  padding: 20px;
-  background: #1e293b;
-  border-radius: 12px;
-}
+        workspaceId: context?.workspaceId,
 
-input,
-button {
-  width: 100%;
-  margin-top: 10px;
-  padding: 12px;
-}
-`;
+        input: {
 
-    // ================= RETURN FILES =================
+          task: input?.instruction || "",
+
+          userRequest: input?.original || "",
+
+          page,
+
+          pages,
+
+          routes: plan.routes || [],
+
+          architecture: plan.architecture || {}
+
+        }
+
+      });
+
+      files.push({
+
+        path: `frontend/src/pages/${page}.jsx`,
+
+        content: content || `export default function ${page}(){
+
+return (
+<div>${page}</div>
+);
+
+}`
+
+      });
+
+    }
+
     return {
       ok: true,
-
-      summary:
-        "Frontend login UI generated",
-
-      files: [
-        {
-          path: "frontend/index.html",
-          content: html
-        },
-
-        {
-          path: "frontend/style.css",
-          content: css
-        }
-      ]
+      files
     };
 
   }

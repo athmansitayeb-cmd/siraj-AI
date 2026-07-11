@@ -9,7 +9,6 @@ import { orchestrate } from "./core/orchestrator.js";
 import User from "./models/User.js";
 import authRouter from "./routes/auth.js";
 import conversationRouter from "./routes/conversation.js";
-import { runtimeGate } from "./core/runtime.js";
 import { getUserPlan } from "./core/entitlements.js";
 import express from "express";
 import http from "http";
@@ -18,21 +17,24 @@ import helmet from "helmet";
 import xss from "xss-clean";
 import hpp from "hpp";
 import mongoSanitize from "express-mongo-sanitize";
+import seoRoutes from "./routes/seo.js";
 import rateLimit from "express-rate-limit";
 import jwt from "jsonwebtoken";
 import path from "path";
 import { fileURLToPath } from "url";
 import { Server } from "socket.io";
 import { createClient } from "redis";
+import Workspace from "./models/Workspace.js";
 import Conversation from "./models/Conversation.js";
 import { safeConversationId, pushUnique } from "./patch_core.js";
+import workspaceRouter from "./routes/workspace.js";
 import summarizeRouter from "./routes/summarize.js";
 import emailRouter from "./routes/email.js";
 import dashboardRouter from "./routes/dashboard.js";
 import paypalWebhook from "./routes/paypal-webhook.js";
 import paypalSubscriptionRouter from "./routes/paypal-subscription.js";
-import dailyVerse from "./routes/dailyVerse.js";
 import { buildLimitEngine } from "./core/limitEngine.js";
+import { loadAgents } from "./core/loadAgents.js";
 
 const redis = createClient({ url: process.env.REDIS_URL });
 
@@ -58,6 +60,10 @@ const __dirname = path.dirname(__filename);
 // ================= APP =================
 const app = express();
 await connectDB();
+await loadAgents();
+
+console.log("[AGENTS LOADED]");
+
 app.set("trust proxy", 1);
 
 redis.connect().then(() => {
@@ -73,12 +79,12 @@ app.use(hpp());
 app.use(mongoSanitize());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
+app.use("/", seoRoutes);
 // routes
 app.use("/api/auth", authRouter);
 app.use("/api/conversation", conversationRouter);
 app.use("/api/dashboard", dashboardRouter);
-app.use("/api", dailyVerse);
+app.use("/api/workspace", workspaceRouter);
 
 // 🔥 PayPal routes
 app.use("/api/paypal", paypalWebhook);
@@ -181,8 +187,20 @@ io.on("connection", (socket) => {
 
   console.log("USER DEBUG:", socket.user);
 
-  socket.on("message", async ({ conversationId, msg }) => {
+  socket.on("message", async ({ conversationId, workspaceId, msg }) => {
+   if (socket.processing) return;
+    socket.processing = true;
+
     try {
+
+if (!workspaceId) {
+  socket.emit("message-error", { msg: "missing_workspace" });
+  return;
+}
+
+      const workspace =
+       await Workspace.findById(workspaceId);
+
       // ================= LIMIT ENGINE =================
       const limiter = buildLimitEngine({
         redis,
@@ -251,12 +269,15 @@ if (
       convo.messages = convo.messages.slice(-50);
 
       // ================= AI =================
-      const orchestrateResult = await orchestrate({
-        convo: convo.messages,
-        msg,
-        userId: socket.user.id,
-        redis
-      });
+const orchestrateResult = await orchestrate({
+  convo: convo.messages,
+  msg,
+  userId: socket.user.id,
+  redis,
+  context: {
+    workspaceId
+  }
+});
 
       if (!orchestrateResult.ok) {
        console.log("BLOCK DEBUG:", orchestrateResult);
@@ -294,10 +315,11 @@ if (
 
     } catch (err) {
       console.error("[SOCKET ERROR]", err);
-    }
-  });
+    }finally {
+    socket.processing = false;
+  }
 });
-
+});
 // ================= START SERVER =================
 const PORT = process.env.PORT || 5000;
 

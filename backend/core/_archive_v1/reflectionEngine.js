@@ -20,7 +20,9 @@ export async function reflectionLoop({
     });
 
     // accepted
-    if (critique.verdict === "acceptable") {
+if (
+  critique?.result?.verdict === "approved"
+) {
 
       return {
         ok: true,

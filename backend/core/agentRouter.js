@@ -8,6 +8,9 @@ import {
 import { writeWorkspaceFile }
   from "./workspaceFs.js";
 
+import { normalizeAgentOutput }
+  from "./utils/agentOutputNormalizer.js";
+
 // ================= ROUTER =================
 export async function runAgent({
   agent,
@@ -17,12 +20,13 @@ export async function runAgent({
 
   const target = getAgent(agent);
 
+  console.log("[ROUTER]", agent, !!target);
+
   if (!target) {
     throw new Error(`Agent not found: ${agent}`);
   }
 
-  // ================= MEMORY =================
-  const memory = getAgentMemory(agent);
+  const memory = await getAgentMemory(agent);
 
   const specialization =
     memory.specialization || {};
@@ -32,6 +36,7 @@ export async function runAgent({
     memory.failures * 0.5;
 
   const enrichedContext = {
+
     ...context,
 
     agentMeta: {
@@ -42,63 +47,118 @@ export async function runAgent({
     },
 
     agentMemory: memory
+
   };
 
   const startedAt = Date.now();
 
   try {
 
-    // ================= EXECUTE =================
-    const result = await target.execute({
+    const rawResult = await target.execute({
       input,
       context: enrichedContext
     });
 
-// ================= AUTO SAVE OUTPUT =================
-if (context?.workspaceId) {
+    const result =
+      normalizeAgentOutput(rawResult);
 
-  const filename =
-    `${agent}_${Date.now()}.md`;
+    if (
+      !result.text &&
+      !Object.keys(result.data || {}).length &&
+      !(result.files || []).length
+    ) {
+      throw new Error("Agent returned empty output");
+    }
 
-  await writeWorkspaceFile({
-    workspaceId: context.workspaceId,
-    file: `logs/${filename}`,
-    content:
-      typeof result === "string"
-        ? result
-        : JSON.stringify(result, null, 2)
-  });
+    if (context.workspaceId) {
 
-}
+      await writeWorkspaceFile({
 
-    // ================= RECORD =================
-    recordAgentTask({
+        workspaceId: context.workspaceId,
+
+        file:
+          `logs/${agent}_${Date.now()}.json`,
+
+        content:
+          JSON.stringify(result, null, 2)
+
+      });
+
+    }
+
+    await recordAgentTask({
+
       agent,
+
       task: input,
+
       success: true
+
     });
 
     return {
-      ok: true,
+
+      ...result,
+
       agent,
-      duration: Date.now() - startedAt,
-      result
+
+      duration:
+        Date.now() - startedAt
+
     };
 
-  } catch (err) {
-
-    // ================= RECORD FAILURE =================
-    recordAgentTask({
-      agent,
-      task: input,
-      success: false
-    });
-
-    return {
-      ok: false,
-      agent,
-      duration: Date.now() - startedAt,
-      error: err.message
-    };
   }
+
+  catch (err) {
+
+    await recordAgentTask({
+
+      agent,
+
+      task: input,
+
+      success: false
+
+    });
+
+    if (context.workspaceId) {
+
+      await writeWorkspaceFile({
+
+        workspaceId: context.workspaceId,
+
+        file:
+          `logs/${agent}_error_${Date.now()}.json`,
+
+        content: JSON.stringify({
+
+          agent,
+
+          input,
+
+          error: err.message,
+
+          stack: err.stack
+
+        }, null, 2)
+
+      });
+
+    }
+
+    return {
+
+      ok: false,
+
+      agent,
+
+      duration:
+        Date.now() - startedAt,
+
+      error: err.message
+
+    };
+
+  }
+
 }

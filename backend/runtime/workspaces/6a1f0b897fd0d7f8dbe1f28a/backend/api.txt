@@ -1,0 +1,6 @@
+Backend scaffold based on plan:
+{
+  "name": "backend",
+  "type": "api",
+  "requirements": []
+}

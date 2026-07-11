@@ -8,13 +8,9 @@ import { Toaster } from "react-hot-toast";
 import AppProviders from "./app/AppProviders";
 import { initTheme } from "./theme/theme";
 import { initBrand } from "./ui/brand/brandEngine";
-import { enforceTokens } from "./ui/governance/tokenGuard";
-import { startUIScanner } from "./ui/governance/runtimeScanner";
 
 initTheme();
 initBrand();
-enforceTokens();
-startUIScanner();
 
 const queryClient = new QueryClient();
 

@@ -8,332 +8,370 @@ import { useParams } from "react-router-dom";
 
 export default function Chat({ isGuest = false }) {
 
-  // ================= IDs =================
+ // ================= IDs =================
 const { workspaceId } = useParams();
 
 useEffect(() => {
-  if (!workspaceId) {
-    console.error("Missing workspaceId");
-    window.location.href = "/intent";
-  }
+ if (!workspaceId) {
+ console.error("Missing workspaceId");
+ window.location.href = "/intent";
+ }
 }, [workspaceId]);
 
-  const [conversationId] = useState(() => {
-    if (isGuest) return crypto.randomUUID();
+const [workspace, setWorkspace] = useState(null);
 
-    const existing = localStorage.getItem("siraj_conversation");
-    if (existing) return existing;
+useEffect(() => {
+ const loadWorkspace = async () => {
+ try {
+ const res = await fetch(
+ `/api/workspace/${workspaceId}`,
+ {
+ headers: {
+ Authorization:
+ "Bearer " + localStorage.getItem("siraj_token")
+ }
+ }
+ );
 
-    const id = crypto.randomUUID();
-    localStorage.setItem("siraj_conversation", id);
-    return id;
-  });
+ const data = await res.json();
 
-  // ================= AUTH =================
-  const token = isGuest ? null : localStorage.getItem("siraj_token");
+ setWorkspace(data);
 
-  // ================= STATE =================
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState("");
-  const [typing, setTyping] = useState(false);
-  const [loadingHistory, setLoadingHistory] = useState(true);
-  const [blocked, setBlocked] = useState(false);
-  const [limitModal, setLimitModal] = useState(null);
+ } catch (err) {
+ console.error("Workspace load error:", err);
+ }
+ };
 
-  // ================= REFS =================
-  const socketRef = useRef(null);
-  const bottomRef = useRef(null);
+ if (workspaceId) {
+ loadWorkspace();
+ }
 
-  // ================= TRACK =================
-  useEffect(() => {
-    trackEvent("open_chat");
-  }, []);
+}, [workspaceId]);
 
-  // ================= LOAD HISTORY =================
-  useEffect(() => {
-    if (!token || isGuest) {
-      setLoadingHistory(false);
-      return;
-    }
+const [conversationId] = useState(() => {
+ const key = `conversation:${workspaceId}`;
+ const existing = localStorage.getItem(key);
 
-    const loadConversation = async () => {
-      try {
-        setLoadingHistory(true);
+ if (existing) return existing;
 
-        const res = await fetch(
-          `https://siraj.software/api/conversation/${conversationId}`,
-          {
-            headers: {
-              Authorization: "Bearer " + token,
-            },
-          }
-        );
+ const id = crypto.randomUUID();
+ localStorage.setItem(key, id);
 
-        const data = await res.json();
+ return id;
+});
 
-        if (Array.isArray(data?.messages)) {
-          setMessages(data.messages);
-        }
-      } catch (err) {
-        console.error("History load error:", err);
-      } finally {
-        setLoadingHistory(false);
-      }
-    };
+ // ================= AUTH =================
+ const token = isGuest ? null : localStorage.getItem("siraj_token");
 
-    loadConversation();
-  }, [conversationId, token, isGuest]);
+ // ================= STATE =================
+ const [messages, setMessages] = useState([]);
+ const [input, setInput] = useState("");
+ const [typing, setTyping] = useState(false);
+ const [loadingHistory, setLoadingHistory] = useState(true);
+ const [blocked, setBlocked] = useState(false);
+ const [limitModal, setLimitModal] = useState(null);
 
-  // ================= SOCKET =================
-  useEffect(() => {
-    socketRef.current = socket;
+ // ================= REFS =================
+ const socketRef = useRef(null);
+ const bottomRef = useRef(null);
 
-    const onStream = (data) => {
-      setTyping(true);
+ // ================= TRACK =================
+ useEffect(() => {
+ trackEvent("open_chat");
+ }, []);
 
-      setMessages((prev) => {
-        const copy = [...prev];
-        const last = copy[copy.length - 1];
+ // ================= LOAD HISTORY =================
+ useEffect(() => {
+ if (!token || isGuest) {
+ setLoadingHistory(false);
+ return;
+ }
 
-        if (last?.role === "assistant") {
-          copy[copy.length - 1] = {
-            ...last,
-            content: (last.content || "") + (data.token || ""),
-          };
-        }
+if (!conversationId) {
+ setLoadingHistory(false);
+ return;
+}
 
-        return copy;
-      });
-    };
+ const loadConversation = async () => {
+ try {
+ setLoadingHistory(true);
 
-    const onEnd = () => setTyping(false);
+ const res = await fetch(
+ `https://siraj.software/api/conversation/${conversationId}`,
+ {
+ headers: {
+ Authorization: "Bearer " + token,
+ },
+ }
+ );
 
-    const onLimit = (data) => {
-      setTyping(false);
-      setBlocked(true);
+ const data = await res.json();
 
-      setLimitModal({
-        title: data.title,
-        message: data.message,
-      });
+ if (Array.isArray(data?.messages)) {
+ setMessages(data.messages);
+ }
+ } catch (err) {
+ console.error("History load error:", err);
+ } finally {
+ setLoadingHistory(false);
+ }
+ };
 
-      trackEvent("limit_hit");
-    };
+ loadConversation();
+ }, [conversationId, token, isGuest]);
 
-    const onError = (data) => {
-      setTyping(false);
+ // ================= SOCKET =================
+ useEffect(() => {
+ socketRef.current = socket;
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content:
-            data?.msg === "too_short"
-              ? "⚠️ Message too short."
-              : data?.msg === "message_too_long"
-              ? "⚠️ Message too long."
-              : "⚠️ System error.",
-        },
-      ]);
-    };
+ const onStream = (data) => {
+ setTyping(true);
 
-    socketRef.current.on("message-stream", onStream);
-    socketRef.current.on("message-stream-end", onEnd);
-    socketRef.current.on("try-limit-reached", onLimit);
-    socketRef.current.on("message-error", onError);
+ setMessages((prev) => {
+ const copy = [...prev];
+ const last = copy[copy.length - 1];
 
-    return () => {
-      socketRef.current.off("message-stream", onStream);
-      socketRef.current.off("message-stream-end", onEnd);
-      socketRef.current.off("try-limit-reached", onLimit);
-      socketRef.current.off("message-error", onError);
-    };
-  }, []);
+ if (last?.role === "assistant") {
+ copy[copy.length - 1] = {
+ ...last,
+ content: (last.content || "") + (data.token || ""),
+ };
+ }
 
-  // ================= AUTO SCROLL =================
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, typing]);
+ return copy;
+ });
+ };
 
-  // ================= SEND =================
-  const sendMessage = () => {
-    if (!input.trim() || typing || blocked) return;
+ const onEnd = () => setTyping(false);
 
-    const msg = input;
-    setInput("");
+ const onLimit = (data) => {
+ setTyping(false);
+ setBlocked(true);
 
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", content: msg },
-      { role: "assistant", content: "" },
-    ]);
+ setLimitModal({
+ title: data.title,
+ message: data.message,
+ });
 
-    socketRef.current?.emit("message", {
-      conversationId,
-      workspaceId,
-      msg,
-      isGuest,
-    });
+ trackEvent("limit_hit");
+ };
 
-    trackEvent("message_sent", { workspaceId });
-  };
+ const onError = (data) => {
+ setTyping(false);
 
-  // ================= UI =================
-  return (
-    <div className="flex flex-col h-screen">
+ setMessages((prev) => [
+ ...prev,
+ {
+ role: "assistant",
+ content:
+ data?.msg === "too_short"
+ ? "⚠️ Message too short."
+ : data?.msg === "message_too_long"
+ ? "⚠️ Message too long."
+ : "⚠️ System error.",
+ },
+ ]);
+ };
 
-      {/* HEADER */}
-      <header className="border-b border-[var(--border)]">
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl flex items-center justify-center bg-blue-500/10 text-blue-400">
-              <Sparkles size={18} />
-            </div>
+ socketRef.current.on("message-stream", onStream);
+ socketRef.current.on("message-stream-end", onEnd);
+ socketRef.current.on("try-limit-reached", onLimit);
+ socketRef.current.on("message-error", onError);
 
-            <div>
-              <div className="font-semibold">SIRAJ AI</div>
-              <div className="text-sm text-muted">Enterprise Runtime</div>
-            </div>
-          </div>
+ return () => {
+ socketRef.current.off("message-stream", onStream);
+ socketRef.current.off("message-stream-end", onEnd);
+ socketRef.current.off("try-limit-reached", onLimit);
+ socketRef.current.off("message-error", onError);
+ };
+ }, []);
 
-          <div className="px-3 py-2 rounded-full text-xs font-medium bg-green-500/10 text-green-600">
-            ONLINE
-          </div>
-        </div>
-      </header>
+ // ================= AUTO SCROLL =================
+ useEffect(() => {
+ bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+ }, [messages, typing]);
 
-      {/* BODY */}
-      <main className="flex-1 overflow-y-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto">
+ // ================= SEND =================
+ const sendMessage = () => {
+ if (!input.trim() || typing || blocked) return;
 
-          {/* EMPTY */}
-          {!loadingHistory && messages.length === 0 && (
-            <div className="text-center mt-28">
-              <h1 className="text-5xl font-bold tracking-tight mb-5">
-                Ask anything
-              </h1>
+ const msg = input;
+ setInput("");
 
-              <p className="text-lg text-muted max-w-2xl mx-auto">
-                Build agents, automate workflows, orchestrate intelligence.
-              </p>
-            </div>
-          )}
+ setMessages((prev) => [
+ ...prev,
+ { role: "user", content: msg },
+ { role: "assistant", content: "" },
+ ]);
 
-          {/* LOADING */}
-          {loadingHistory && (
-            <div className="flex justify-center py-20">
-              <Loader2 className="animate-spin" size={32} />
-            </div>
-          )}
+ socketRef.current?.emit("message", {
+ conversationId,
+ workspaceId,
+ msg,
+ isGuest,
+ });
 
-          {/* MESSAGES */}
-          <AnimatePresence>
-            {messages.map((m, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`flex mb-5 ${
-                  m.role === "user" ? "justify-end" : "justify-start"
-                }`}
-              >
-                <div
-                  className={`max-w-[85%] rounded-3xl px-5 py-4 text-sm leading-7 shadow-soft border ${
-                    m.role === "user"
-                      ? "bg-[var(--primary)] text-white border-transparent"
-                      : "glass"
-                  }`}
-                >
-                  <ReactMarkdown>{m.content}</ReactMarkdown>
-                </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
+ trackEvent("message_sent", { workspaceId });
+ };
 
-          {/* TYPING */}
-          {typing && (
-            <div className="mb-6 text-sm text-muted">
-              SIRAJ thinking...
-            </div>
-          )}
+ // ================= UI =================
+ return (
+ <div className="flex flex-col h-screen">
 
-          <div ref={bottomRef} />
-        </div>
-      </main>
+ {/* HEADER */}
+ <header className="border-b border-[var(--border)]">
+ <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+ <div className="flex items-center gap-3">
+ <div className="w-11 h-11 rounded-2xl flex items-center justify-center bg-blue-500/10 text-blue-400">
+ <Sparkles size={18} />
+ </div>
 
-      {/* INPUT */}
-      <footer className="border-t border-[var(--border)]">
-        <div className="max-w-4xl mx-auto flex items-center gap-3 px-4 py-4">
+ <div>
+ <div className="font-semibold">
+ {workspace?.intent || "SIRAJ AI"}
+ </div>
+ <div className="text-sm text-muted">Enterprise Runtime</div>
+ </div>
+ </div>
 
-          <div className="flex-1 flex items-center gap-3 rounded-3xl px-4 py-3 glass">
-            <textarea
-              rows={1}
-              value={input}
-              disabled={blocked}
-              placeholder={blocked ? "Upgrade required" : "Message SIRAJ..."}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  sendMessage();
-                }
-              }}
-              className="flex-1 resize-none bg-transparent outline-none text-sm"
-            />
-          </div>
+ <div className="px-3 py-2 rounded-full text-xs font-medium bg-green-500/10 text-green-600">
+ ONLINE
+ </div>
+ </div>
+ </header>
 
-          <button
-            onClick={sendMessage}
-            disabled={blocked || typing}
-            className="btn-primary h-[56px] px-6 rounded-2xl"
-          >
-            <Send size={18} />
-          </button>
-        </div>
-      </footer>
+ {/* BODY */}
+ <main className="flex-1 overflow-y-auto px-4 py-8">
+ <div className="max-w-4xl mx-auto">
 
-      {/* MODAL */}
-      <AnimatePresence>
-        {limitModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-          >
-            <motion.div
-              initial={{ scale: 0.95 }}
-              animate={{ scale: 1 }}
-              className="w-full max-w-md glass p-8 text-center"
-            >
-              <div className="text-sm text-red-500 mb-3 tracking-[0.2em]">
-                LIMIT REACHED
-              </div>
+ {/* EMPTY */}
+ {!loadingHistory && messages.length === 0 && (
+ <div className="text-center mt-28">
+ <h1 className="text-5xl font-bold tracking-tight mb-5">
+ Ask anything
+ </h1>
 
-              <h2 className="text-2xl font-bold mb-3">
-                {limitModal.title}
-              </h2>
+ <p className="text-lg text-muted max-w-2xl mx-auto">
+ Build agents, automate workflows, orchestrate intelligence.
+ </p>
+ </div>
+ )}
 
-              <p className="text-muted mb-7">
-                {limitModal.message}
-              </p>
+ {/* LOADING */}
+ {loadingHistory && (
+ <div className="flex justify-center py-20">
+ <Loader2 className="animate-spin" size={32} />
+ </div>
+ )}
 
-              <button
-                className="btn-primary w-full"
-                onClick={() => (window.location.href = "/upgrade")}
-              >
-                Upgrade
-              </button>
+ {/* MESSAGES */}
+ <AnimatePresence>
+ {messages.map((m, i) => (
+ <motion.div
+ key={i}
+ initial={{ opacity: 0, y: 12 }}
+ animate={{ opacity: 1, y: 0 }}
+ className={`flex mb-5 ${
+ m.role === "user" ? "justify-end" : "justify-start"
+ }`}
+ >
+ <div
+ className={`max-w-[85%] rounded-3xl px-5 py-4 text-sm leading-7 shadow-soft border ${
+ m.role === "user"
+ ? "bg-[var(--primary)] text-[var(--text)] border-transparent"
+ : "glass"
+ }`}
+ >
+ <ReactMarkdown>{m.content}</ReactMarkdown>
+ </div>
+ </motion.div>
+ ))}
+ </AnimatePresence>
 
-              <button
-                className="mt-4 text-sm text-muted"
-                onClick={() => setLimitModal(null)}
-              >
-                Maybe later
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
+ {/* TYPING */}
+ {typing && (
+ <div className="mb-6 text-sm text-muted">
+ SIRAJ thinking...
+ </div>
+ )}
+
+ <div ref={bottomRef} />
+ </div>
+ </main>
+
+ {/* INPUT */}
+ <footer className="border-t border-[var(--border)]">
+ <div className="max-w-4xl mx-auto flex items-center gap-3 px-4 py-4">
+
+ <div className="flex-1 flex items-center gap-3 rounded-3xl px-4 py-3 glass">
+ <textarea
+ rows={1}
+ value={input}
+ disabled={blocked}
+ placeholder={blocked ? "Upgrade required" : "Message SIRAJ..."}
+ onChange={(e) => setInput(e.target.value)}
+ onKeyDown={(e) => {
+ if (e.key === "Enter" && !e.shiftKey) {
+ e.preventDefault();
+ sendMessage();
+ }
+ }}
+ className="flex-1 resize-none bg-transparent outline-none text-sm"
+ />
+ </div>
+
+ <button
+ onClick={sendMessage}
+ disabled={blocked || typing}
+ className="btn-primary h-[56px] px-6 rounded-2xl"
+ >
+ <Send size={18} />
+ </button>
+ </div>
+ </footer>
+
+ {/* MODAL */}
+ <AnimatePresence>
+ {limitModal && (
+ <motion.div
+ initial={{ opacity: 0 }}
+ animate={{ opacity: 1 }}
+ className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(0,0,0,0.6)]"
+ >
+ <motion.div
+ initial={{ scale: 0.95 }}
+ animate={{ scale: 1 }}
+ className="w-full max-w-md glass p-8 text-center"
+ >
+ <div className="text-sm text-red-500 mb-3 tracking-[0.2em]">
+ LIMIT REACHED
+ </div>
+
+ <h2 className="text-2xl font-bold mb-3">
+ {limitModal.title}
+ </h2>
+
+ <p className="text-muted mb-7">
+ {limitModal.message}
+ </p>
+
+ <button
+ className="btn-primary w-full"
+ onClick={() => (window.location.href = "/upgrade")}
+ >
+ Upgrade
+ </button>
+
+ <button
+ className="mt-4 text-sm text-muted"
+ onClick={() => setLimitModal(null)}
+ >
+ Maybe later
+ </button>
+ </motion.div>
+ </motion.div>
+ )}
+ </AnimatePresence>
+ </div>
+ );
 }

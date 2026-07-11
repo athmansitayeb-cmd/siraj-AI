@@ -2,35 +2,26 @@ import { getAccess } from "./accessControl.js";
 import { getUserPlan } from "./entitlements.js";
 import { buildPaywall } from "./paywall.js";
 import { getUserMemory } from "./userMemory.js";
-import Groq from "groq-sdk";
-import crypto from "crypto";
-import { guardResponse } from "./guard.js";
-import { buildUsageLog } from "./tokenMeter.js";
-import { buildSirajCore } from "./sirajCore.js";
-import { buildMemoryGraph } from "./memoryGraph.js";
-import { reasonDecision } from "./reasoningEngine.js";
 import { updateFeedback } from "./feedbackLoop.js";
-import { buildLimitEngine } from "./limitEngine.js";
+import { bootstrapCore } from "./bootstrap.js";
+import { executeTasks } from "./runtimeEngine.js";
+import Workspace from "../models/Workspace.js";
+import crypto from "crypto";
+import { buildSirajCore } from "./sirajCore.js";
+import { unifiedPlanner } from "./unifiedPlanner.js";
 
-let groq;
+export async function orchestrate({
+convo,
+msg,
+userId,
+redis,
+context = {}
+}) {
 
-function getGroq() {
-  if (!process.env.GROQ_API_KEY) {
-    throw new Error("GROQ_API_KEY missing at runtime");
-  }
+try {
 
-  if (!groq) {
-    groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-  }
+await bootstrapCore();
 
-  return groq;
-}
-
-// ================= ORCHESTRATOR =================
-export async function orchestrate({ convo, msg, userId, redis }) {
-  try {
-
-// ================= VALIDATION =================
 if (!msg || typeof msg !== "string") {
   return { ok: false, reason: "invalid_input" };
 }
@@ -39,196 +30,211 @@ if (msg.length < 2) {
   return { ok: false, reason: "too_short" };
 }
 
-// 🔥 HARD LIMIT: message length (free protection)
 if (msg.length > 800) {
   return buildPaywall("message_too_long", {
     limit: 800
   });
 }
 
-// ================= PLAN + ACCESS =================
 const isGuest =
-  typeof userId === "string" && userId.startsWith("guest_");
+  userId?.startsWith("guest_");
 
-let rawPlan;
+let planRaw = "free";
 
 try {
-  rawPlan = isGuest
+  planRaw = isGuest
     ? "free"
     : await getUserPlan(userId, redis);
-} catch (e) {
-  console.error("[PLAN FAIL]", e);
-  rawPlan = "free";
-}
+} catch {}
 
-const plan = ["free", "pro", "guest"].includes(rawPlan)
-  ? rawPlan
+const userPlan = ["free", "pro", "guest"].includes(planRaw)
+  ? planRaw
   : "free";
 
-const access = getAccess(plan);
+getAccess(userPlan);
 
-    // ================= CACHE =================
-    const cacheKey = `ai:${userId}:${crypto
-      .createHash("sha256")
-      .update(msg + plan + "v1")
-      .digest("hex")}`;
+const cacheKey = `ai:${userId}:${crypto
+  .createHash("sha256")
+  .update(msg + userPlan)
+  .digest("hex")}`;
 
-    if (redis) {
-      const cached = await redis.get(cacheKey);
-      if (cached) return { ok: true, text: cached, cached: true };
-    }
+if (redis) {
+  const cached = await redis.get(cacheKey);
 
-    // ================= MEMORY =================
-    const userMemory = await getUserMemory(userId);
-    const graph = buildMemoryGraph(userMemory);
-    const focus = graph?.dominantGoal || null;
-    const risk = graph?.mainStruggle || null;
+  if (cached) {
+    return {
+      ok: true,
+      text: cached,
+      cached: true
+    };
+  }
+}
 
-// ================= CORE + REASONING =================
-const tempCore = buildSirajCore({
-  convo,
-  msg,
-  memory: userMemory
-});
+let workspace = null;
 
-const reasoning = reasonDecision({
-  state: tempCore.state,
-  intent: tempCore.intent,
-  mode: tempCore.mode,
-  focus,
-  risk
-});
+if (context?.workspaceId) {
+  workspace =
+    await Workspace.findById(
+      context.workspaceId
+    ).lean();
+}
 
-const core = buildSirajCore({
+const userMemory =
+  await getUserMemory(userId);
+
+const cognition = buildSirajCore({
   convo,
   msg,
   memory: userMemory,
-  reasoning,
-  focus
+  reasoning: {},
+  focus: context?.focus || null
 });
 
-// 🔥 override mode بالقرار الحقيقي
-if (!focus && !risk) {
-  reasoning.mode = "respond";
-}
- 
-   const recent = convo
-      .slice(-20)
-      .map(m => ({ role: m.role, content: m.content }));
+const initialPlan = unifiedPlanner({
+  msg,
+  cognition
+});
 
-const lastUserMsgs = convo
-  .filter(m => m.role === "user")
-  .slice(-5)
-  .map(m => m.content.toLowerCase());
+let tasks = initialPlan.tasks;
 
-const repeatedFailure =
-  lastUserMsgs.filter(m => m.includes("فشلت")).length >= 2;
+// Execute planner whenever it is the first task
+if (
+  tasks.length > 0 &&
+  tasks[0]?.agent === "planner"
+) {
 
-if (repeatedFailure) {
-  core.systemPrompt.content += `
-ALERT:
-User is repeating failure pattern → confront directly. Do NOT comfort.
-`;
-}
+  const planner = await executeTasks(
+    [tasks[0]],
+    {
+      workspaceId: context.workspaceId,workspace,
+      traceId: context.traceId,
 
-// ================= AI CALL (SMART LOOP) =================
-let attempts = 0;
-const maxAttempts = 1;
+      intent: cognition.intent,
+      state: cognition.state,
+      mode: cognition.mode,
 
-let text = "";
-let lastCandidate = "";
-
-while (attempts < maxAttempts) {
-
-  const retryHint = "Be clearer and more specific.";
-
-  const messages = [
-    core.systemPrompt,
-    ...recent.slice(-10),
-    ...(attempts > 0
-      ? [{ role: "system", content: retryHint }]
-      : [])
-  ];
-
-  const completion = await getGroq().chat.completions.create({
-    model: access.model,
-    messages,
-    temperature: attempts === 0 ? 0.5 : 0.3,
-    max_tokens: 1200
-  });
-
-  const candidate = completion?.choices?.[0]?.message?.content || "";
-  lastCandidate = candidate;
-
-  const check = guardResponse(candidate);
-
-  if (check.ok) {
-    text = candidate;
-    break;
-  }
-
-  attempts++;
-}
-
-// fallback
-if (!text || text.length < 15) {
-  text = lastCandidate || "Unable to generate response.";
-}
-
-
-// ================= MEMORY UPDATE =================
-function shouldRunMemoryExtraction(msg, userMemory) {
-  const msgText = msg.toLowerCase();
-
-  const strongSignals =
-    /اريد|هدفي|اعاني|مشكل|تعبان|ضايع|فشلت|بدأت/.test(msgText);
-
-  const meaningful = msg.length > 70;
-
-  const stateChange =
-    userMemory?.lastState &&
-    userMemory.lastState !== "normal";
-
-  const lastCheck = userMemory?.lastCheckAt
-    ? Date.now() - new Date(userMemory.lastCheckAt).getTime()
-    : Infinity;
-
-  const cooldownOk = lastCheck > 1000 * 60 * 30;
-
-  return (strongSignals && meaningful && cooldownOk) || stateChange;
-}
-
-// ================= MEMORY UPDATE =================
-const shouldExtract = shouldRunMemoryExtraction(msg, userMemory);
-
-if (access.memory && shouldExtract) {
-  try {
-    const { extractUserMemory } = await import("./memoryExtractor.js");
-    const { updateUserMemory } = await import("./userMemory.js");
-
-    const extracted = await extractUserMemory(msg);
-    if (extracted) await updateUserMemory(userId, extracted);
-
-  } catch (e) {
-    console.error("[MEMORY FAIL]", e);
-  }
-}
-
-    // ================= FEEDBACK LOOP =================
-    await updateFeedback(userMemory, msg, text);
-
-    // ================= CACHE SAVE =================
-    if (redis) {
-      await redis.setEx(cacheKey, 600, text);
+      systemPrompt: cognition.systemPrompt,
+      originalPrompt: msg
     }
+  );
 
-    return {
-      ok: true,
-      text
-    };
+const plannerOutput =
+  planner.results?.[0]?.output || {};
 
-  } catch (e) {
-    console.error("[ORCHESTRATOR ERROR]", e);
-    return { ok: false, reason: "internal_error" };
+console.log(
+  "[PLANNER OUTPUT]",
+  JSON.stringify(plannerOutput, null, 2)
+);
+
+const plannerTasks =
+  plannerOutput.tasks ||
+  plannerOutput.data?.tasks ||
+  [];
+
+if (plannerTasks.length) {
+  tasks = plannerTasks;
+}
+
+console.log(
+  "[PLANNER TASKS]",
+  JSON.stringify(tasks, null, 2)
+);
+}
+
+const result = await executeTasks(
+  tasks,
+  {
+    workspaceId: context.workspaceId,workspace,
+    traceId: context.traceId,
+
+    intent: cognition.intent,
+    state: cognition.state,
+    mode: cognition.mode,
+
+    systemPrompt: cognition.systemPrompt,
+    originalPrompt: msg
   }
+);
+
+console.log(
+  "[EXECUTE TASKS RESULT]",
+  JSON.stringify(result, null, 2)
+);
+
+let finalOutput = {
+  ok: result.ok,
+
+  files: result.files || [],
+
+  graph: result.graph,
+
+  summary: result.summary,
+
+  critic: result.critic,
+
+  runtimeId: result.runtimeId
+};
+
+try {
+  if (typeof finalOutput === "string") {
+    finalOutput = JSON.parse(finalOutput);
+  }
+} catch {}
+
+console.log("[FINAL OUTPUT]", finalOutput);
+
+return finalize(
+  finalOutput,
+  userMemory,
+  msg,
+  redis,
+  cacheKey
+);
+
+} catch (e) {
+
+console.error(
+  "[ORCHESTRATOR ERROR]",
+  e
+);
+
+return {
+  ok: false,
+  reason: "internal_error"
+};
+
+}
+}
+
+async function finalize(
+output,
+memory,
+msg,
+redis,
+cacheKey
+) {
+
+await updateFeedback(
+memory,
+msg,
+output
+);
+
+const text =
+JSON.stringify(output, null, 2);
+
+if (redis) {
+await redis.setEx(
+cacheKey,
+600,
+text
+);
+}
+
+return {
+  ok: true,
+  output,
+  text
+};
+
 }

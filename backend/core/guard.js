@@ -1,13 +1,8 @@
-import { isNoise } from "./noise.js";
 import { isSemanticallyWeak } from "./semantic.js";
 
 export function guardResponse(text) {
   if (!text || text.trim().length < 10) {
     return { ok: false, reason: "too_short" };
-  }
-
-  if (isNoise(text)) {
-    return { ok: false, reason: "noise_detected" };
   }
 
   if (isSemanticallyWeak(text)) {

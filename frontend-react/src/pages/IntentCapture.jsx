@@ -3,184 +3,197 @@ import { trackEvent } from "../analytics";
 import { motion } from "framer-motion";
 
 import {
-  Bot,
-  Briefcase,
-  PenSquare,
-  Headphones,
-  Code2,
-  Search,
-  TrendingUp,
-  Sparkles
+ Bot,
+ Briefcase,
+ PenSquare,
+ Headphones,
+ Code2,
+ Search,
+ TrendingUp,
+ Sparkles
 } from "lucide-react";
 
 import { UI } from "../ui/registry";
 
 export default function IntentCapture() {
-  const navigate = useNavigate();
+ const navigate = useNavigate();
 
-  const intents = [
-    {
-      title: "Personal Assistant",
-      description:
-        "Manage tasks, planning, reminders, and daily productivity.",
-      icon: <Bot size={20} />
-    },
-    {
-      title: "Customer Support",
-      description:
-        "Handle customer inquiries, support tickets, and responses.",
-      icon: <Headphones size={20} />
-    },
-    {
-      title: "Content Creation",
-      description:
-        "Generate articles, marketing content, and creative assets.",
-      icon: <PenSquare size={20} />
-    },
-    {
-      title: "Business Automation",
-      description:
-        "Automate repetitive processes and operational workflows.",
-      icon: <Briefcase size={20} />
-    },
-    {
-      title: "Coding Agent",
-      description:
-        "Build, debug, and manage software development tasks.",
-      icon: <Code2 size={20} />
-    },
-    {
-      title: "Research Agent",
-      description:
-        "Collect information, analyze data, and generate insights.",
-      icon: <Search size={20} />
-    },
-    {
-      title: "Sales Assistant",
-      description:
-        "Support lead generation, outreach, and sales workflows.",
-      icon: <TrendingUp size={20} />
-    },
-    {
-      title: "Custom Agent",
-      description:
-        "Create an agent tailored to your unique goals and workflows.",
-      icon: <Sparkles size={20} />
-    }
-  ];
+ const intents = [
+ {
+ title: "Personal Assistant",
+ description:
+ "Manage tasks, planning, reminders, and daily productivity.",
+ icon: <Bot size={20} />
+ },
+ {
+ title: "Customer Support",
+ description:
+ "Handle customer inquiries, support tickets, and responses.",
+ icon: <Headphones size={20} />
+ },
+ {
+ title: "Content Creation",
+ description:
+ "Generate articles, marketing content, and creative assets.",
+ icon: <PenSquare size={20} />
+ },
+ {
+ title: "Business Automation",
+ description:
+ "Automate repetitive processes and operational workflows.",
+ icon: <Briefcase size={20} />
+ },
+ {
+ title: "Coding Agent",
+ description:
+ "Build, debug, and manage software development tasks.",
+ icon: <Code2 size={20} />
+ },
+ {
+ title: "Research Agent",
+ description:
+ "Collect information, analyze data, and generate insights.",
+ icon: <Search size={20} />
+ },
+ {
+ title: "Sales Assistant",
+ description:
+ "Support lead generation, outreach, and sales workflows.",
+ icon: <TrendingUp size={20} />
+ },
+ {
+ title: "Custom Agent",
+ description:
+ "Create an agent tailored to your unique goals and workflows.",
+ icon: <Sparkles size={20} />
+ }
+ ];
 
-  const selectIntent = async (intent) => {
-    try {
-      trackEvent("intent_selected", { intent });
+const selectIntent = async (intent) => {
+ try {
+ trackEvent("intent_selected", { intent });
 
-      const res = await fetch("/api/workspace/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization:
-            "Bearer " + localStorage.getItem("siraj_token")
-        },
-        body: JSON.stringify({ intent })
-      });
+ const existing = localStorage.getItem(`workspace:${intent}`);
 
-      const data = await res.json();
+ if (existing) {
+ navigate(`/chat/${existing}`);
+ return;
+ }
 
-      console.log("WORKSPACE RESPONSE:", data);
+ const res = await fetch("/api/workspace/create", {
+ method: "POST",
+ headers: {
+ "Content-Type": "application/json",
+ Authorization:
+ "Bearer " + localStorage.getItem("siraj_token")
+ },
+ body: JSON.stringify({ intent })
+ });
 
-      const workspaceId = data._id || data.id;
+ const data = await res.json();
 
-      if (!workspaceId) {
-        console.error("No workspace id returned");
-        return;
-      }
+ console.log("WORKSPACE RESPONSE:", data);
 
-      localStorage.setItem("workspace_id", workspaceId);
+const workspaceId = data._id || data.id;
 
-      navigate(`/chat/${workspaceId}`);
+if (!workspaceId) {
+ console.error("Invalid workspace response", data);
+ return;
+}
 
-    } catch (e) {
-      console.error("INTENT ERROR:", e);
-    }
-  };
+localStorage.setItem(`workspace:${intent}`, workspaceId);
 
-  return (
-    <div className="min-h-screen flex items-center justify-center p-6">
+const conversationId =
+ data.conversationId || crypto.randomUUID();
 
-      <div className="w-full max-w-6xl">
+localStorage.setItem("workspace_id", workspaceId);
+localStorage.setItem(`conversation:${workspaceId}`, conversationId);
 
-        {/* HEADER */}
-        <div className="text-center mb-14">
+navigate(`/chat/${workspaceId}`);
 
-          <UI.Card className="inline-flex items-center gap-2 px-4 py-2 mb-6">
+ } catch (e) {
+ console.error("INTENT ERROR:", e);
+ }
+ };
 
-            <div className="w-2 h-2 rounded-full bg-[var(--success)]" />
+ return (
+ <div className="min-h-screen flex items-center justify-center p-6">
 
-            <span className="text-sm text-muted">
-              Workspace Initialization
-            </span>
+ <div className="w-full max-w-6xl">
 
-          </UI.Card>
+ {/* HEADER */}
+ <div className="text-center mb-14">
 
-          <h1 className="text-5xl font-bold tracking-tight mb-5">
-            What kind of AI Agent do you want to create?
-          </h1>
+ <UI.Card className="inline-flex items-center gap-2 px-4 py-2 mb-6">
 
-          <p className="text-lg text-muted max-w-2xl mx-auto leading-relaxed">
-            Select a starting point and SIRAJ will create a workspace
-            configured for your AI agent.
-          </p>
+ <div className="w-2 h-2 rounded-full bg-[var(--success)]" />
 
-        </div>
+ <span className="text-sm text-muted">
+ Workspace Initialization
+ </span>
 
-        {/* GRID */}
-        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
+ </UI.Card>
 
-          {intents.map((item) => (
-            <motion.div
-              key={item.title}
-              whileHover={{ y: -4 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => selectIntent(item.title)}
-              className="cursor-pointer"
-            >
-              <UI.Card
-                className="
-                  h-full
-                  cursor-pointer
-                  transition-all
-                  duration-300
-                  hover:shadow-medium
-                "
-              >
+ <h1 className="text-5xl font-bold tracking-tight mb-5">
+ What kind of AI Agent do you want to create?
+ </h1>
 
-                <div
-                  className="
-                    w-14 h-14 rounded-2xl
-                    flex items-center justify-center
-                    mb-5
-                    bg-[var(--bg-2)]
-                    text-[var(--primary)]
-                  "
-                >
-                  {item.icon}
-                </div>
+ <p className="text-lg text-muted max-w-2xl mx-auto leading-relaxed">
+ Select a starting point and SIRAJ will create a workspace
+ configured for your AI agent.
+ </p>
 
-                <h2 className="text-xl font-semibold mb-3">
-                  {item.title}
-                </h2>
+ </div>
 
-                <p className="text-sm text-muted leading-relaxed">
-                  {item.description}
-                </p>
+ {/* GRID */}
+ <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
 
-              </UI.Card>
-            </motion.div>
-          ))}
+ {intents.map((item) => (
+ <motion.div
+ key={item.title}
+ whileHover={{ y: -4 }}
+ whileTap={{ scale: 0.98 }}
+ onClick={() => selectIntent(item.title)}
+ className="cursor-pointer"
+ >
+ <UI.Card
+ className="
+ h-full
+ cursor-pointer
+ transition-all
+ duration-300
+ hover:shadow-medium
+ "
+ >
 
-        </div>
+ <div
+ className="
+ w-14 h-14 rounded-2xl
+ flex items-center justify-center
+ mb-5
+ bg-[var(--bg-2)]
+ text-[var(--primary)]
+ "
+ >
+ {item.icon}
+ </div>
 
-      </div>
+ <h2 className="text-xl font-semibold mb-3">
+ {item.title}
+ </h2>
 
-    </div>
-  );
+ <p className="text-sm text-muted leading-relaxed">
+ {item.description}
+ </p>
+
+ </UI.Card>
+ </motion.div>
+ ))}
+
+ </div>
+
+ </div>
+
+ </div>
+ );
 }

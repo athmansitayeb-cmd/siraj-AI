@@ -1,64 +1,96 @@
-import { registerAgent }
-  from "../agentRegistry.js";
+import { registerAgent } from "../agentRegistry.js";
+import { readKnowledge } from "../sharedWorkspaceBus.js";
+import { CodeAgent } from "../CodeAgent.js";
 
-// ================= BACKEND AGENT =================
-registerAgent("backend", {
+const agent = new CodeAgent({
+  name: "backend",
+  temperature: 0.1,
+  role: `
+You are a senior Node.js backend architect.
 
-  description:
-    "Creates backend auth API",
+The USER REQUEST is the complete project vision.
 
-  async execute({
-    input,
-    context
-  }) {
+The TASK is your current responsibility.
 
-    const workspaceId =
-      context.workspaceId;
+Generate production-ready Express backend.
 
-    // ================= EXPRESS ROUTE =================
-    const apiCode = `
-import express from "express";
+Requirements:
 
-const router = express.Router();
-
-router.post("/login", async (req, res) => {
-
-  const {
-    email,
-    password
-  } = req.body;
-
-  if (!email || !password) {
-    return res.status(400).json({
-      error: "missing_fields"
-    });
-  }
-
-  // fake auth
-  return res.json({
-    ok: true,
-    token: "demo_token"
-  });
-
+- Express
+- REST API
+- JSON middleware
+- Production-ready
+- Return ONLY code
+`
 });
 
-export default router;
-`;
+registerAgent("backend", {
 
-    // ================= WRITE =================
-return {
-  ok: true,
+  description: "Backend code generator",
 
-  summary:
-    "Backend auth API generated",
+  async execute({ input, context }) {
 
-  files: [
-    {
-      path: "backend/auth.js",
-      content: apiCode
-    }
-  ]
-};
+    const knowledge = context?.workspaceId
+      ? await readKnowledge(context.workspaceId)
+      : [];
+
+    const latest = knowledge.at(-1)?.data || {};
+
+    const plan =
+      latest ||
+      input?.dependencies?.[0]?.result ||
+      {};
+
+    const content = await agent.generate({
+
+      workspaceId: context?.workspaceId,
+
+      input: {
+
+        task: input?.instruction || "",
+
+        userRequest: input?.original || "",
+
+        architecture: plan.architecture || {},
+
+        routes: plan.routes || [],
+
+        entities: plan.entities || []
+
+      }
+
+    });
+
+    return {
+
+      ok: true,
+
+      files: [
+
+        {
+
+          path: "backend/server.js",
+
+          content:
+            content ||
+`import express from "express";
+
+const app = express();
+
+app.use(express.json());
+
+app.get("/", (req,res)=>{
+  res.json({ ok:true });
+});
+
+app.listen(3001);
+`
+
+        }
+
+      ]
+
+    };
 
   }
 

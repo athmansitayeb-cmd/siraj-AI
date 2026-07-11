@@ -1,80 +1,106 @@
+import {
+  loadAgentMemory,
+  saveAgentMemory
+} from "./agentMemoryStore.js";
+
 const agentMemoryStore = new Map();
 
 // ================= GET =================
-export function getAgentMemory(agent) {
+export async function getAgentMemory(agent) {
 
-  if (!agentMemoryStore.has(agent)) {
-
-    agentMemoryStore.set(agent, {
-      agent,
-      runs: 0,
-      successes: 0,
-      failures: 0,
-      lastTasks: [],
-      notes: [],
-      specialization: {}
-    });
-
+  if (agentMemoryStore.has(agent)) {
+    return agentMemoryStore.get(agent);
   }
 
-  return agentMemoryStore.get(agent);
+  const memory = await loadAgentMemory(agent) || {
+    agent,
+    runs: 0,
+    successes: 0,
+    failures: 0,
+    lastTasks: [],
+    notes: [],
+    specialization: {}
+  };
+
+  agentMemoryStore.set(agent, memory);
+
+  return memory;
 }
 
 // ================= UPDATE =================
 export function updateAgentMemory(agent, patch = {}) {
 
-  const current = getAgentMemory(agent);
+  const current = agentMemoryStore.get(agent) || {
+    agent,
+    runs: 0,
+    successes: 0,
+    failures: 0,
+    lastTasks: [],
+    notes: [],
+    specialization: {}
+  };
 
   const updated = {
+
     ...current,
-    ...patch
+
+    ...patch,
+
+    notes: [
+      ...(current.notes || []),
+      ...(patch.notes || [])
+    ],
+
+    specialization: {
+      ...(current.specialization || {}),
+      ...(patch.specialization || {})
+    }
+
   };
 
   agentMemoryStore.set(agent, updated);
 
+  saveAgentMemory(agent, updated).catch(() => {});
+
   return updated;
+
 }
 
 // ================= RECORD TASK =================
-export function recordAgentTask({
+export async function recordAgentTask({
   agent,
   task,
   success = true
 }) {
 
-  const memory = getAgentMemory(agent);
+  const memory = await getAgentMemory(agent);
 
-  // ===== RUNS =====
   memory.runs++;
 
-  // ===== SUCCESS / FAILURE =====
-  if (success) {
-    memory.successes++;
-  } else {
-    memory.failures++;
-  }
+  memory.lastRun = Date.now();
 
-const type =
-  typeof task === "string"
-    ? task.split(" ")[0].toLowerCase()
-    : "general";
+  if (success) memory.successes++;
+  else memory.failures++;
 
-memory.specialization[type] =
-  (memory.specialization[type] || 0) + 1;
+  const type =
+    typeof task === "string"
+      ? task.split(" ")[0].toLowerCase()
+      : "general";
 
-  // ===== TASK HISTORY =====
+  memory.specialization[type] =
+    (memory.specialization[type] || 0) + 1;
+
   memory.lastTasks.unshift({
     task,
     success,
     ts: Date.now()
   });
 
-  memory.lastTasks =
-    memory.lastTasks.slice(0, 20);
+  memory.lastTasks = memory.lastTasks.slice(0, 20);
 
-
-  // ===== SAVE =====
   agentMemoryStore.set(agent, memory);
+
+  await saveAgentMemory(agent, memory);
 
   return memory;
 }

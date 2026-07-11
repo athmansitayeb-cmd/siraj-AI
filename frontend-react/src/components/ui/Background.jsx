@@ -2,22 +2,22 @@ import { Canvas } from "@react-three/fiber";
 import { Sphere, MeshDistortMaterial, OrbitControls } from "@react-three/drei";
 
 export default function Background() {
-  return (
-    <Canvas className="absolute inset-0 z-0 pointer-events-none">
-      <ambientLight intensity={0.4} />
-      <directionalLight position={[5, 5, 5]} intensity={0.7} />
+ return (
+ <Canvas className="absolute inset-0 z-0 pointer-events-none">
+ <ambientLight intensity={0.4} />
+ <directionalLight position={[5, 5, 5]} intensity={0.7} />
 
-      <Sphere args={[1.5, 64, 64]} scale={2}>
-        <MeshDistortMaterial
-          color="#facc15"
-          attach="material"
-          distort={0.5}
-          speed={2}
-        />
-      </Sphere>
+ <Sphere args={[1.5, 64, 64]} scale={2}>
+ <MeshDistortMaterial
+ color="#facc15"
+ attach="material"
+ distort={0.5}
+ speed={2}
+ />
+ </Sphere>
 
-      {/* مهم جداً: هذا يمنع التفاعل */}
-      <OrbitControls enableZoom={false} enableRotate={false} />
-    </Canvas>
-  );
+ {/* مهم جداً: هذا يمنع التفاعل */}
+ <OrbitControls enableZoom={false} enableRotate={false} />
+ </Canvas>
+ );
 }

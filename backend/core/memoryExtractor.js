@@ -1,6 +1,5 @@
-import Groq from "groq-sdk";
+import { groq } from "./groqClient.js";
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 export async function extractUserMemory(msg) {
   if (!msg || msg.length < 20) return null;
