@@ -1,29 +1,101 @@
 import { BaseAgent } from "./BaseAgent.js";
+import { readKnowledge } from "./sharedWorkspaceBus.js";
 
 export class CodeAgent extends BaseAgent {
 
   constructor(config = {}) {
     super(config);
+
     this.role = config.role || "";
   }
 
-  async generate({ workspaceId, input }) {
+  // ================= CLEAN MODEL OUTPUT =================
+  clean(content = "") {
 
-    const prompt = [
+return String(content)
+  .replace(/^```[a-zA-Z]*\s*/i, "")
+  .replace(/\s*```$/i, "")
+  .trim();
+
+  }
+
+  // ================= BUILD PROMPT =================
+  async buildPrompt(workspaceId, input, context = {}) {
+
+    let latestPlan = {};
+
+    if (workspaceId) {
+
+      try {
+
+        const knowledge =
+          await readKnowledge(workspaceId);
+
+const plannerKnowledge =
+  [...knowledge]
+    .reverse()
+    .find(k => k.agent === "planner");
+
+latestPlan =
+  plannerKnowledge?.data || {};
+
+      } catch {}
+
+    }
+
+    return [
       {
         role: "system",
         content: this.role
       },
       {
         role: "user",
-        content: JSON.stringify(input, null, 2)
+content: JSON.stringify({
+
+  task: input,
+
+  planner: latestPlan,
+
+  workspaceFiles:
+    context.workspace?.files || [],
+
+  sharedKnowledge:
+    context.workspace?.knowledge || [],
+
+  agent:
+    context.agentMeta || {},
+
+  previousRuns:
+    context.agentMemory || {}
+
+}, null, 2)
       }
     ];
 
-    return await this.ask(prompt);
+  }
+
+  // ================= GENERATE =================
+  async generate({
+    workspaceId,
+    input
+  }) {
+
+    const prompt =
+      await this.buildPrompt(
+        workspaceId,
+        input,
+        input.context || {}
+      );
+
+const content = await super.ask(prompt);
+
+const cleaned = this.clean(content);
+
+return cleaned.length ? cleaned : "";
 
   }
 
+  // ================= GENERATE FILE =================
   async generateFile({
 
     prompt,
@@ -37,7 +109,25 @@ export class CodeAgent extends BaseAgent {
 
     try {
 
-      content = await this.ask(prompt);
+      if (!prompt) {
+
+        content =
+          await this.generate({
+            workspaceId,
+            input: {
+              file: path
+            }
+          });
+
+      } else {
+
+        const result =
+          await super.ask(prompt);
+
+        content =
+          this.clean(result);
+
+      }
 
     } catch {
 
@@ -45,12 +135,21 @@ export class CodeAgent extends BaseAgent {
 
     }
 
-    await this.publish(
-      workspaceId,
-      {
-        generated: path
-      }
-    );
+    if (workspaceId) {
+
+      try {
+
+        await this.publish(
+          workspaceId,
+          {
+            generated: path,
+            ts: Date.now()
+          }
+        );
+
+      } catch {}
+
+    }
 
     return {
       path,
@@ -59,19 +158,16 @@ export class CodeAgent extends BaseAgent {
 
   }
 
+  // ================= PARALLEL FILE GENERATION =================
   async generateFiles(files = []) {
 
-    const output = [];
+    return Promise.all(
 
-    for (const file of files) {
+      files.map(file =>
+        this.generateFile(file)
+      )
 
-      output.push(
-        await this.generateFile(file)
-      );
-
-    }
-
-    return output;
+    );
 
   }
 

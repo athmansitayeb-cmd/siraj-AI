@@ -1,6 +1,7 @@
 import { registerAgent } from "../agentRegistry.js";
 import { readKnowledge } from "../sharedWorkspaceBus.js";
 import { CodeAgent } from "../CodeAgent.js";
+import { readWorkspaceFile } from "../workspaceFs.js";
 
 const agent = new CodeAgent({
   name: "backend",
@@ -13,6 +14,27 @@ The USER REQUEST is the complete project vision.
 The TASK is your current responsibility.
 
 Generate production-ready Express backend.
+
+If an existing server.js is provided:
+
+If existingServer is provided, it is the source of truth.
+
+Update it in-place.
+
+Do NOT generate auth_routes.js.
+
+Do NOT split files.
+
+Do NOT create new files.
+
+Return ONLY the updated backend/server.js.
+
+- NEVER recreate it.
+- NEVER delete existing routes.
+- ONLY merge the requested changes.
+- Preserve every existing endpoint.
+- Preserve middleware.
+- Preserve imports.
 
 Requirements:
 
@@ -34,30 +56,69 @@ registerAgent("backend", {
       ? await readKnowledge(context.workspaceId)
       : [];
 
-    const latest = knowledge.at(-1)?.data || {};
+const plannerKnowledge =
+  [...knowledge]
+    .reverse()
+    .find(k => k.agent === "planner");
 
-    const plan =
-      latest ||
-      input?.dependencies?.[0]?.result ||
-      {};
+const plan =
+  plannerKnowledge?.data ||
+  input?.dependencies
+    ?.find(d => d.result?.architecture)
+    ?.result ||
+  {};
+
+const existingServer =
+  context?.workspaceId
+    ? await readWorkspaceFile({
+        workspaceId: context.workspaceId,
+        file: "backend/server.js"
+      })
+    : "";
 
     const content = await agent.generate({
 
       workspaceId: context?.workspaceId,
 
-      input: {
+input: {
+  task: input?.instruction || "",
 
-        task: input?.instruction || "",
+  userRequest: input?.original || "",
 
-        userRequest: input?.original || "",
+  instruction: `
+Current server.js:
 
-        architecture: plan.architecture || {},
+${existingServer || "No existing server."}
 
-        routes: plan.routes || [],
+Modify ONLY this file.
 
-        entities: plan.entities || []
+Never recreate it.
 
-      }
+Never remove existing routes.
+
+Only implement the requested task.
+
+Return the COMPLETE updated server.js.
+
+Never duplicate imports.
+
+Never duplicate middleware.
+
+Never duplicate routes.
+
+If functionality already exists:
+extend it instead of recreating it.
+
+Keep formatting clean.
+
+`,
+
+  architecture: plan.architecture || {},
+
+  routes: plan.routes || [],
+
+  entities: plan.entities || []
+}
 
     });
 
@@ -71,9 +132,10 @@ registerAgent("backend", {
 
           path: "backend/server.js",
 
-          content:
-            content ||
-`import express from "express";
+content:
+  (content && content.trim().length > 50)
+    ? content
+    : `import express from "express";
 
 const app = express();
 
@@ -85,7 +147,6 @@ app.get("/", (req,res)=>{
 
 app.listen(3001);
 `
-
         }
 
       ]

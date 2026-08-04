@@ -52,3 +52,30 @@ export async function getRuntimeState(
     .collection("runtime_states")
     .findOne({ runtimeId });
 }
+
+// ================= DELETE =================
+export async function deleteRuntimeState(runtimeId) {
+
+  const db = await getDB();
+
+  await db
+    .collection("runtime_states")
+    .deleteOne({
+      runtimeId
+    });
+
+}
+
+// ================= RUNNING =================
+export async function getRunningRuntimes() {
+
+  const db = await getDB();
+
+  return db
+    .collection("runtime_states")
+    .find({
+      status: "running"
+    })
+    .toArray();
+
+}

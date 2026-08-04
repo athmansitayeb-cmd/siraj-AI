@@ -1,6 +1,5 @@
 import crypto from "crypto";
-
-import { addTask } from "./taskGraph.js";
+import { addTask, updateTask } from "./taskGraph.js";
 
 export async function runtimeReflectionLoop({
   graph,
@@ -9,10 +8,10 @@ export async function runtimeReflectionLoop({
   updatePlan
 }) {
 
-  graph.reflectionCount =
-    (graph.reflectionCount || 0) + 1;
+graph.meta.reflectionCount =
+(graph.meta.reflectionCount || 0) + 1;
 
-  if (graph.reflectionCount > 3) {
+  if (graph.meta.reflectionCount > 3) {
     return {
       ok: false,
       reason: "max_reflection_reached"
@@ -33,129 +32,111 @@ export async function runtimeReflectionLoop({
     )
   );
 
-  const criticNode = Object.values(graph.nodes)
-    .find(n => n.agent === "critic");
+const lastCritic = Object.values(graph.nodes)
+  .filter(n => n.agent === "critic")
+  .sort((a, b) => b.createdAt - a.createdAt)[0];
 
-  const depends =
-    criticNode ? [criticNode.id] : [];
+const depends =
+  lastCritic ? [lastCritic.id] : [];
+
+const injectedIds = [];
 
   function inject(agent, input) {
 
-    const key = `${agent}:${input}`;
+    const key = `${agent}:${input.trim().toLowerCase()}`;
 
     if (injected.has(key)) return;
 
     injected.add(key);
 
-    addTask(graph, {
-      id: crypto.randomUUID(),
-      type: "agent",
-      agent,
-      input,
-      dependsOn: depends
-    });
+const id = crypto.randomUUID();
+
+addTask(graph, {
+  id,
+  type: "agent",
+  agent,
+  input,
+  dependsOn: depends
+});
+
+injectedIds.push(id);
 
   }
 
-  // ================= AUTO REPAIR =================
+// ================= AUTO REPAIR =================
 
-  for (const issue of issues) {
+for (const issue of issues) {
 
-    if (issue.type === "missing_frontend_login") {
+  const agent =
+    issue.agent ||
+    (issue.type?.includes("frontend")
+      ? "frontend"
+      : issue.type?.includes("backend")
+      ? "backend"
+      : "repair");
 
-      if (graph.nodes["frontend_1"]) {
-        graph.nodes["frontend_1"].input =
-          "create Login.jsx with React state and form validation";
-      }
+  const instruction =
+    issue.fix ||
+    issue.description ||
+    issue.message;
 
-      inject(
-        "frontend",
-        "create Login.jsx with React state and form validation"
-      );
-    }
+  if (!instruction) continue;
 
-    else if (issue.type === "missing_backend_server") {
+  inject(agent, instruction);
 
-      if (graph.nodes["backend_1"]) {
-        graph.nodes["backend_1"].input =
-          "create Express server.js with auth routes";
-      }
+}
 
-      inject(
-        "backend",
-        "create Express server.js with auth routes"
-      );
-    }
+// إذا كانت المشاكل كثيرة اطلب إعادة التخطيط
 
-    else if (issue.type === "missing_page") {
+if (criticalIssues.length >= 3) {
 
-      inject(
-        "frontend",
-        issue.fix
-      );
+  await updatePlan({
+    improve: true,
+    issues,
+    criticalCount: criticalIssues.length
+  });
 
-    }
-
-    else if (issue.type === "missing_entity") {
-
-      inject(
-        "backend",
-        issue.fix
-      );
-
-    }
-
-    else if (issue.type === "frontend_missing_route") {
-
-      inject(
-        "frontend",
-        issue.fix
-      );
-
-    }
-
-    else if (issue.type.includes("missing_route")) {
-
-      const route = issue.meta?.route;
-
-      if (route && graph.nodes["backend_1"]) {
-        graph.nodes["backend_1"].input +=
-          `\nensure route ${route}`;
-      }
-
-      inject(
-        "backend",
-        `implement route ${route}`
-      );
-
-    }
-
-  }
+}
 
   // ================= SECOND CRITIC PASS =================
 
-  if (issues.length > 0) {
+  if (issues.length > 0 && injectedIds.length > 0) {
 
-    const repairTasks = Object.values(graph.nodes)
-      .filter(n =>
-        n.agent === "frontend" ||
-        n.agent === "backend"
-      )
-      .map(n => n.id);
+const repairTasks = injectedIds;
 
-    addTask(graph, {
-      id: crypto.randomUUID(),
-      type: "agent",
-      agent: "critic",
-      input: "review repaired workspace",
-      dependsOn: repairTasks
-    });
+const criticTask = {
+  id: crypto.randomUUID(),
+  type: "agent",
+  agent: "critic",
+  input: "review repaired workspace",
+  dependsOn: repairTasks
+};
 
-    await updatePlan({
-      improve: true,
-      issues,
-      criticalCount: criticalIssues.length
-    });
+const hasPendingCritic = Object.values(graph.nodes).some(
+  n =>
+    n.agent === "critic" &&
+    (n.status === "pending" || n.status === "running")
+);
+
+if (!hasPendingCritic) {
+    addTask(graph, criticTask);
+}
+
+const finalNode = graph.nodes["final_output"];
+
+if (finalNode) {
+  updateTask(graph, finalNode.id, {
+    dependsOn: [criticTask.id]
+  });
+}
+
+if (injectedIds.length) {
+  await updatePlan({
+    improve: true,
+    issues,
+    criticalCount: criticalIssues.length
+  });
+}
 
   }
 
@@ -164,7 +145,7 @@ export async function runtimeReflectionLoop({
     repaired: criticalIssues.length,
     totalIssues: issues.length,
     hasIssues: issues.length > 0,
-    reflectionCount: graph.reflectionCount
+    reflectionCount: graph.meta.reflectionCount
   };
 
 }

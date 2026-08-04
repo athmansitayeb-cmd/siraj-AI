@@ -109,3 +109,39 @@ export async function listWorkspaceFiles(workspaceId) {
   return files;
 
 }
+// ================= WORKSPACE SNAPSHOT =================
+
+export async function getWorkspaceSnapshot(workspaceId) {
+
+  const files =
+    await listWorkspaceFiles(workspaceId);
+
+  const snapshot = {
+    files: [],
+    map: {},
+    stats: {
+      totalFiles: files.length
+    }
+  };
+
+  for (const file of files) {
+
+    const content =
+      await readWorkspaceFile({
+        workspaceId,
+        file
+      });
+
+    snapshot.files.push({
+      path: file,
+      size: content?.length || 0
+    });
+
+    snapshot.map[file] =
+      content || "";
+
+  }
+
+  return snapshot;
+
+}

@@ -9,6 +9,42 @@ import Workspace from "../models/Workspace.js";
 import crypto from "crypto";
 import { buildSirajCore } from "./sirajCore.js";
 import { unifiedPlanner } from "./unifiedPlanner.js";
+import { getAgent } from "./agentRegistry.js";
+import { listWorkspaceFiles } from "./workspaceFs.js";
+import { readKnowledge } from "./sharedWorkspaceBus.js";
+import { getWorkspaceMemory } from "./workspaceMemory.js";
+
+function compactOutput(data = {}) {
+
+  return {
+    ok: data.ok,
+
+    runtimeId: data.runtimeId,
+
+    files: (data.files || []).map(file => ({
+      path: file.path,
+      size: file.content?.length || 0
+    })),
+
+    summary: data.summary,
+
+    critic: data.critic
+      ? {
+          verdict: data.critic.verdict,
+          repair: data.critic.repair,
+          issues: data.critic.summary
+        }
+      : null,
+
+    graph: data.graph
+      ? {
+          nodes: Object.keys(data.graph.nodes || {}).length,
+          reflections: data.graph.reflectionCount || 0
+        }
+      : null
+  };
+
+}
 
 export async function orchestrate({
 convo,
@@ -17,7 +53,7 @@ userId,
 redis,
 context = {}
 }) {
-
+console.log("===== ORCHESTRATOR START =====");
 try {
 
 await bootstrapCore();
@@ -79,6 +115,29 @@ if (context?.workspaceId) {
     ).lean();
 }
 
+let workspaceFiles = [];
+let workspaceKnowledge = [];
+let workspaceMemory = {};
+
+if (context?.workspaceId) {
+
+  workspaceFiles =
+    await listWorkspaceFiles(
+      context.workspaceId
+    );
+
+  workspaceKnowledge =
+    await readKnowledge(
+      context.workspaceId
+    );
+
+  workspaceMemory =
+    await getWorkspaceMemory(
+      context.workspaceId
+    );
+
+}
+
 const userMemory =
   await getUserMemory(userId);
 
@@ -95,6 +154,31 @@ const initialPlan = unifiedPlanner({
   cognition
 });
 
+console.log(
+  "[INITIAL PLAN]",
+  JSON.stringify(initialPlan, null, 2)
+);
+
+if (initialPlan.intent === "conversation") {
+
+  const assistant = getAgent("assistant");
+
+  const res = await assistant.execute({
+    input: {
+      original: msg
+    },
+    context: {
+      systemPrompt: cognition.systemPrompt
+    }
+  });
+
+  return {
+    ok: true,
+    text: res.text,
+    output: res
+  };
+}
+
 let tasks = initialPlan.tasks;
 
 // Execute planner whenever it is the first task
@@ -105,17 +189,25 @@ if (
 
   const planner = await executeTasks(
     [tasks[0]],
-    {
-      workspaceId: context.workspaceId,workspace,
-      traceId: context.traceId,
+{
+  workspaceId: context.workspaceId,
 
-      intent: cognition.intent,
-      state: cognition.state,
-      mode: cognition.mode,
+  workspace: {
+    snapshot: workspace,
+    files: workspaceFiles,
+    knowledge: workspaceKnowledge,
+    memory: workspaceMemory
+  },
 
-      systemPrompt: cognition.systemPrompt,
-      originalPrompt: msg
-    }
+  traceId: context.traceId,
+
+  intent: cognition.intent,
+  state: cognition.state,
+  mode: cognition.mode,
+
+  systemPrompt: cognition.systemPrompt,
+  originalPrompt: msg
+}
   );
 
 const plannerOutput =
@@ -131,8 +223,17 @@ const plannerTasks =
   plannerOutput.data?.tasks ||
   [];
 
+if (!plannerOutput.ok) {
+  return {
+    ok: false,
+    reason: plannerOutput.error || "planner_failed"
+  };
+}
+
 if (plannerTasks.length) {
   tasks = plannerTasks;
+
+context.planner = plannerOutput;
 }
 
 console.log(
@@ -143,22 +244,30 @@ console.log(
 
 const result = await executeTasks(
   tasks,
-  {
-    workspaceId: context.workspaceId,workspace,
-    traceId: context.traceId,
+{
+  workspaceId: context.workspaceId,
+  planner: plannerOutput,
+  workspace: {
+    snapshot: workspace,
+    files: workspaceFiles,
+    knowledge: workspaceKnowledge,
+    memory: workspaceMemory
+  },
 
-    intent: cognition.intent,
-    state: cognition.state,
-    mode: cognition.mode,
+  traceId: context.traceId,
 
-    systemPrompt: cognition.systemPrompt,
-    originalPrompt: msg
-  }
+  intent: cognition.intent,
+  state: cognition.state,
+  mode: cognition.mode,
+
+  systemPrompt: cognition.systemPrompt,
+  originalPrompt: msg
+}
 );
 
 console.log(
   "[EXECUTE TASKS RESULT]",
-  JSON.stringify(result, null, 2)
+  JSON.stringify(compactOutput(result), null, 2)
 );
 
 let finalOutput = {
@@ -181,7 +290,10 @@ try {
   }
 } catch {}
 
-console.log("[FINAL OUTPUT]", finalOutput);
+console.log(
+  "[FINAL OUTPUT]",
+  JSON.stringify(compactOutput(finalOutput), null, 2)
+);
 
 return finalize(
   finalOutput,
@@ -232,9 +344,8 @@ text
 }
 
 return {
-  ok: true,
+  ok: output.ok,
   output,
   text
 };
-
 }

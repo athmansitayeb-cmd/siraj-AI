@@ -14,6 +14,16 @@ The TASK is your current responsibility.
 
 Generate ONLY the requested page.
 
+Never recreate existing pages.
+
+Never duplicate components.
+
+Reuse existing layout.
+
+Preserve imports.
+
+Return only valid JSX.
+
 Rules:
 
 - React functional component.
@@ -34,21 +44,40 @@ registerAgent("frontend", {
       ? await readKnowledge(context.workspaceId)
       : [];
 
-    const latest = knowledge.at(-1)?.data || {};
+const plannerKnowledge =
+  [...knowledge]
+    .reverse()
+    .find(k => k.agent === "planner");
 
-    const plan =
-      latest ||
-      input?.dependencies?.[0]?.result ||
-      {};
+const plan =
+  plannerKnowledge?.data ||
+  input?.dependencies
+    ?.find(d => d.result?.architecture)
+    ?.result ||
+  {};
 
-    const pages =
-      plan.pages?.length
-        ? plan.pages
-        : ["App"];
+let pages = plan.pages || [];
+
+if (!pages.length) {
+
+  const task = (input?.instruction || "").toLowerCase();
+
+  if (task.includes("login")) pages = ["Login"];
+  else if (task.includes("dashboard")) pages = ["Dashboard"];
+  else if (task.includes("analytics")) pages = ["Analytics"];
+  else if (task.includes("admin")) pages = ["Admin"];
+  else pages = ["App"];
+
+}
 
     const files = [];
 
-    for (const page of pages) {
+   for (const pageInfo of pages) {
+
+     const page =
+       typeof pageInfo === "string"
+         ? pageInfo
+         : pageInfo.name;
 
       const content = await agent.generate({
 
@@ -76,7 +105,10 @@ registerAgent("frontend", {
 
         path: `frontend/src/pages/${page}.jsx`,
 
-        content: content || `export default function ${page}(){
+content:
+  (content && content.trim().length > 50)
+    ? content
+    : `export default function ${page}(){
 
 return (
 <div>${page}</div>
@@ -88,10 +120,13 @@ return (
 
     }
 
-    return {
-      ok: true,
-      files
-    };
+return {
+  ok: true,
+  files,
+  pages,
+  routes: plan.routes || [],
+  entities: plan.entities || []
+};
 
   }
 

@@ -32,11 +32,19 @@ registerAgent("architect", {
 
     const ws = context?.workspaceId;
 
-    const knowledge =
-      await agent.readWorkspace(ws);
+const knowledge =
+  await agent.readWorkspace(ws);
 
-    const latest =
-      knowledge.at(-1)?.data || {};
+const plannerKnowledge =
+  [...knowledge]
+    .reverse()
+    .find(k => k.agent === "planner");
+
+const latest =
+  plannerKnowledge?.data ||
+  (knowledge.length
+    ? knowledge[knowledge.length - 1].data
+    : {});
 
     const fallback = {
 
@@ -71,7 +79,6 @@ registerAgent("architect", {
 
     const result =
       await agent.askJSON(
-
 JSON.stringify({
 
 task:
@@ -98,42 +105,39 @@ fallback
 
 );
 
+const safe = {
+  architecture: result?.architecture || fallback.architecture,
+  routes: result?.routes || fallback.routes,
+  pages: result?.pages || fallback.pages,
+  entities: result?.entities || fallback.entities,
+  folders: result?.folders || fallback.folders,
+  modules: result?.modules || fallback.modules,
+  services: result?.services || fallback.services
+};
+
     await agent.saveWorkspace(
       ws,
       {
 
-        architecture:
-          result.architecture,
-
-        routes:
-          result.routes,
-
-        pages:
-          result.pages,
-
-        entities:
-          result.entities,
-
-        folders:
-          result.folders,
-
-        modules:
-          result.modules,
-
-        services:
-          result.services
+architecture: safe.architecture,
+routes: safe.routes,
+pages: safe.pages,
+entities: safe.entities,
+folders: safe.folders,
+modules: safe.modules,
+services: safe.services
 
       }
     );
 
     await agent.publish(
       ws,
-      result
+      safe
     );
 
     return {
       ok: true,
-      result
+      result: safe
     };
 
   }

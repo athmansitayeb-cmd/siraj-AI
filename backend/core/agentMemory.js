@@ -14,6 +14,7 @@ export async function getAgentMemory(agent) {
 
   const memory = await loadAgentMemory(agent) || {
     agent,
+    version: 1,
     runs: 0,
     successes: 0,
     failures: 0,
@@ -40,7 +41,7 @@ export function updateAgentMemory(agent, patch = {}) {
     specialization: {}
   };
 
-  const updated = {
+const updated = {
 
     ...current,
 
@@ -49,7 +50,12 @@ export function updateAgentMemory(agent, patch = {}) {
     notes: [
       ...(current.notes || []),
       ...(patch.notes || [])
-    ],
+    ].slice(-100),
+
+lastTasks: [
+  ...(current.lastTasks || []),
+  ...(patch.lastTasks || [])
+].slice(-20),
 
     specialization: {
       ...(current.specialization || {}),

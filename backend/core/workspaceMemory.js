@@ -3,6 +3,9 @@ import { getDB } from "./db/mongoClient.js";
 const COLLECTION = "workspace_memories";
 
 const DEFAULT_MEMORY = {
+
+  version: 1,
+
   architecture: {},
 
   frontend: {},
@@ -22,6 +25,19 @@ const DEFAULT_MEMORY = {
   createdAt: 0,
   updatedAt: 0
 };
+
+function uniqueItems(arr = []) {
+
+  return [
+    ...new Map(
+      arr.map(item => [
+        JSON.stringify(item),
+        item
+      ])
+    ).values()
+  ];
+
+}
 
 // ================= GET =================
 export async function getWorkspaceMemory(workspaceId) {
@@ -88,37 +104,37 @@ export async function updateWorkspaceMemory(
       ...(patch.database || {})
     },
 
-    routes: [
-      ...new Set([
-        ...(current.routes || []),
-        ...(patch.routes || [])
-      ])
-    ],
+routes: uniqueItems([
+  ...(current.routes || []),
+  ...(patch.routes || [])
+]).slice(-200),
 
-    pages: [
-      ...new Set([
-        ...(current.pages || []),
-        ...(patch.pages || [])
-      ])
-    ],
+pages: uniqueItems([
+  ...(current.pages || []),
+  ...(patch.pages || [])
+]).slice(-200),
 
-    entities: [
-      ...new Set([
-        ...(current.entities || []),
-        ...(patch.entities || [])
-      ])
-    ],
+entities: uniqueItems([
+  ...(current.entities || []),
+  ...(patch.entities || [])
+]).slice(-200),
 
-    criticIssues: [
+criticIssues: [
+  ...new Map(
+    [
       ...(current.criticIssues || []),
       ...(patch.criticIssues || [])
-    ],
+    ].map(item => [
+      JSON.stringify(item),
+      item
+    ])
+  ).values()
+].slice(-100),
 
-    sharedContext:
-      patch.sharedContext ||
-      current.sharedContext ||
-
-      [],
+sharedContext: [
+  ...(current.sharedContext || []),
+  ...(patch.sharedContext || [])
+].slice(-100),
 
     updatedAt: Date.now()
 

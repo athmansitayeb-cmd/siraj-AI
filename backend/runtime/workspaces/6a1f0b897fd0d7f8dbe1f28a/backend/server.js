@@ -1,76 +1,93 @@
-// src/app.js
+// Import required modules
 const express = require('express');
 const app = express();
-const port = 3001;
+const port = 3000;
 
+// Use JSON middleware
 app.use(express.json());
 
-// Routes
-app.get('/healthcheck', (req, res) => {
-  res.status(200).send('Server is up and running');
+// Define routes
+app.get('/login', (req, res) => {
+  res.send('Login route');
 });
 
-// Entities
-class Todo {
-  constructor(id, title, completed) {
+app.get('/register', (req, res) => {
+  res.send('Register route');
+});
+
+app.get('/dashboard', (req, res) => {
+  res.send('Dashboard route');
+});
+
+app.get('/analytics', (req, res) => {
+  res.send('Analytics route');
+});
+
+app.get('/admin', (req, res) => {
+  res.send('Admin route');
+});
+
+// Implement route /api/admin
+app.get('/api/admin', (req, res) => {
+  res.send('Admin API route');
+});
+
+// Example entity models
+class User {
+  constructor(id, name, email) {
     this.id = id;
-    this.title = title;
-    this.completed = completed;
+    this.name = name;
+    this.email = email;
   }
 }
 
-// In-memory todo list (replace with database in production)
-let todoList = [
-  new Todo(1, 'Buy milk', false),
-  new Todo(2, 'Walk the dog', true),
-];
-
-// Routes implementation
-app.get('/todos', (req, res) => {
-  res.status(200).json(todoList);
-});
-
-app.get('/todos/:id', (req, res) => {
-  const id = parseInt(req.params.id);
-  const todo = todoList.find((todo) => todo.id === id);
-  if (!todo) {
-    res.status(404).send(`Todo with id ${id} not found`);
-  } else {
-    res.status(200).json(todo);
+class Customer {
+  constructor(id, name, email) {
+    this.id = id;
+    this.name = name;
+    this.email = email;
   }
-});
+}
 
-app.post('/todos', (req, res) => {
-  const { title, completed } = req.body;
-  const newTodo = new Todo(todoList.length + 1, title, completed);
-  todoList.push(newTodo);
-  res.status(201).json(newTodo);
-});
-
-app.put('/todos/:id', (req, res) => {
-  const id = parseInt(req.params.id);
-  const todo = todoList.find((todo) => todo.id === id);
-  if (!todo) {
-    res.status(404).send(`Todo with id ${id} not found`);
-  } else {
-    const { title, completed } = req.body;
-    todo.title = title;
-    todo.completed = completed;
-    res.status(200).json(todo);
+class Lead {
+  constructor(id, name, email) {
+    this.id = id;
+    this.name = name;
+    this.email = email;
   }
-});
+}
 
-app.delete('/todos/:id', (req, res) => {
-  const id = parseInt(req.params.id);
-  const index = todoList.findIndex((todo) => todo.id === id);
-  if (index === -1) {
-    res.status(404).send(`Todo with id ${id} not found`);
-  } else {
-    todoList.splice(index, 1);
-    res.status(204).send();
+class Account {
+  constructor(id, name, email) {
+    this.id = id;
+    this.name = name;
+    this.email = email;
   }
+}
+
+// Example REST API endpoints
+app.post('/users', (req, res) => {
+  const user = new User(req.body.id, req.body.name, req.body.email);
+  res.send(user);
 });
 
+app.get('/users', (req, res) => {
+  const users = [new User(1, 'John Doe', 'john@example.com'), new User(2, 'Jane Doe', 'jane@example.com')];
+  res.send(users);
+});
+
+app.put('/users/:id', (req, res) => {
+  const id = req.params.id;
+  const user = new User(id, req.body.name, req.body.email);
+  res.send(user);
+});
+
+app.delete('/users/:id', (req, res) => {
+  const id = req.params.id;
+  res.send(`User with id ${id} deleted`);
+});
+
+// Start server
 app.listen(port, () => {
   console.log(`Server started on port ${port}`);
 });

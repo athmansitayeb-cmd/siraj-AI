@@ -17,6 +17,7 @@ export async function loadAgentMemory(agent) {
 
     memory = {
       agent,
+      version: 1,
 
       runs: 0,
       successes: 0,
@@ -47,12 +48,15 @@ export async function saveAgentMemory(agent, memory) {
     { agent },
     {
       $set: {
+        version: memory.version || 1,
+
         runs: memory.runs,
         successes: memory.successes,
         failures: memory.failures,
         lastRun: memory.lastRun || null,
-        lastTasks: memory.lastTasks,
-        notes: memory.notes,
+        lastTasks: (memory.lastTasks || []).slice(0,20),
+
+        notes: (memory.notes || []).slice(-100),
         specialization: memory.specialization,
         updatedAt: Date.now()
       }

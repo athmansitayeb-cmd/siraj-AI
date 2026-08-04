@@ -5,96 +5,63 @@ export function unifiedPlanner({
   cognition
 }) {
 
-  console.log("===== UNIFIED PLANNER v5 =====");
+  console.log("===== UNIFIED PLANNER v6 =====");
 
   const text = String(msg || "").trim();
   const lower = text.toLowerCase();
 
-  const intent = cognition?.intent || "general";
-
   // ================= SIMPLE CONVERSATION =================
+
   const simpleConversation =
     text.length < 40 &&
-    !/(build|create|generate|design|system|architecture|dashboard|api|database|backend|frontend|project|application|app)/i.test(lower);
+    !/(build|create|generate|develop|design|system|architecture|dashboard|api|database|backend|frontend|project|application|app|software|platform|crm|saas|website|أنشئ|ابن|اصنع|طور|صمم|موقع|واجهة|قاعدة|بيانات|تطبيق|مشروع|برمج|API|واجهة برمجة)/i.test(lower)
 
   if (simpleConversation) {
 
+console.log("[UNIFIED] planner mode");
+console.log("[UNIFIED] intent:", cognition?.intent);
+console.log("[UNIFIED] prompt:", text);
+
     return {
-      version: "v5-conversation",
+
+      version: "v6-conversation",
+
       intent: "conversation",
+
       tasks: [
+
         {
           id: "assistant_1",
           type: "agent",
           agent: "assistant",
-          input: text
+          input: text,
+          priority: 10,
+          cost: 1,
+          estimatedTime: 1
         },
+
         {
           id: "final_output",
           type: "synthesis",
+          priority: 1,
+          cost: 1,
+          estimatedTime: 1,
           dependsOn: ["assistant_1"]
         }
+
       ]
+
     };
 
   }
 
-  // ================= SINGLE SPECIALIZED AGENT =================
-  const routing = [
-    {
-      regex: /(research|search|analyze)/i,
-      agent: "research"
-    },
-    {
-      regex: /(frontend|react|jsx|ui|page)/i,
-      agent: "frontend"
-    },
-    {
-      regex: /(backend|express|server|api|database|auth)/i,
-      agent: "backend"
-    },
-    {
-      regex: /(architecture|design|system)/i,
-      agent: "architect"
-    }
-  ];
+  // ================= EVERYTHING ELSE =================
 
-  for (const rule of routing) {
-
-    if (rule.regex.test(lower) && text.length < 120) {
-
-      if (getAgent(rule.agent)) {
-
-        return {
-          version: "v5-single-agent",
-          intent: rule.agent,
-          tasks: [
-            {
-              id: `${rule.agent}_1`,
-              type: "agent",
-              agent: rule.agent,
-              input: text
-            },
-            {
-              id: "final_output",
-              type: "synthesis",
-              dependsOn: [`${rule.agent}_1`]
-            }
-          ]
-        };
-
-      }
-
-    }
-
-  }
-
-  // ================= COMPLEX PROJECT =================
   return {
 
-    version: "v5-planner",
+    version: "v6-planner",
 
-    intent: "complex",
+    intent: cognition?.intent || "planning",
 
     tasks: [
 
@@ -102,13 +69,10 @@ export function unifiedPlanner({
         id: "planner_1",
         type: "agent",
         agent: "planner",
-        input: text
-      },
-
-      {
-        id: "final_output",
-        type: "synthesis",
-        dependsOn: ["planner_1"]
+        input: text,
+        priority: 10,
+        cost: 2,
+        estimatedTime: 2
       }
 
     ]

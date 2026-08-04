@@ -17,6 +17,17 @@ const instruction = String(
   input?.instruction || ""
 );
 
+const critic = input?.critic || null;
+
+const currentGraph = input?.graph || null;
+
+const existingTaskIds = new Set(
+  Object.keys(currentGraph?.nodes || {})
+);
+
+const repairMode =
+  instruction === "Repair execution graph";
+
 const msg = originalPrompt || instruction;
 
     const completion = await groq.chat.completions.create({
@@ -31,6 +42,24 @@ You are the MASTER PLANNER of SIRAJ.
 Your job is NOT to answer the user.
 
 Your ONLY responsibility is to transform the user's request into an optimal execution graph for the runtime engine.
+
+The planner has TWO modes.
+
+MODE 1
+Initial planning.
+
+Create the execution graph from the user's request.
+
+MODE 2
+Repair planning.
+
+If critic data and the current graph are provided:
+
+- Analyze the current graph.
+- Keep completed tasks.
+- Never recreate successful tasks.
+- Create ONLY the additional repair tasks required.
+- Return ONLY the new tasks that should be appended.
 
 Return ONLY valid JSON.
 
@@ -50,7 +79,12 @@ OUTPUT FORMAT
   "estimatedTasks": 0,
   "architecture": {},
   "routes": [],
-  "pages": [],
+  "pages": [
+    {
+      "name": "",
+      "route": ""
+    }
+  ],
   "entities": [],
   "tasks":[]
 }
@@ -118,8 +152,68 @@ Each task MUST be
 "type":"agent",
 "agent":"backend",
 "input":"clear instruction",
+
+"priority":5,
+"cost":1,
+"estimatedTime":1,
+
 "dependsOn":[]
 }
+
+--------------------------------------------------
+TASK PRIORITY
+--------------------------------------------------
+
+priority
+
+10 = planner
+
+9 = architect
+
+8 = database
+
+8 = backend
+
+8 = frontend
+
+7 = api
+
+7 = auth
+
+6 = testing
+
+5 = security
+
+4 = documentation
+
+3 = deployment
+
+2 = critic
+
+1 = synthesis
+
+--------------------------------------------------
+TASK COST
+--------------------------------------------------
+
+Estimate relative execution cost.
+
+1 = tiny
+
+3 = small
+
+5 = medium
+
+8 = large
+
+13 = huge
+
+--------------------------------------------------
+ESTIMATED TIME
+--------------------------------------------------
+
+Estimate execution duration in seconds.
+
 
 Allowed types
 
@@ -343,7 +437,24 @@ Extract all API routes.
 PAGES
 --------------------------------------------------
 
-Extract UI pages.
+Return page objects.
+
+Example
+
+"pages":[
+  {
+    "name":"Login",
+    "route":"/api/auth"
+  },
+  {
+    "name":"Dashboard",
+    "route":"/api/dashboard"
+  },
+  {
+    "name":"Analytics",
+    "route":"/api/analytics"
+  }
+]
 
 --------------------------------------------------
 ENTITIES
@@ -400,17 +511,106 @@ No explanations.
 No prose.
           `
         },
-        {
-          role: "user",
-          content: msg
-        }
+{
+  role: "user",
+  content: repairMode
+    ? JSON.stringify({
+        originalRequest: originalPrompt,
+        critic,
+        graph: currentGraph
+      }, null, 2)
+    : msg
+}
       ]
     });
+console.log("===== GROQ COMPLETION =====");
+console.dir(completion, { depth: null });
 
-    let text = completion?.choices?.[0]?.message?.content || "{}";
+let text = completion?.choices?.[0]?.message?.content || "{}";
 
-    try {
-const plan = JSON.parse(text);
+console.log("===== RAW TEXT =====");
+console.log(text);
+
+// تنظيف أي Markdown يضيفه الـ LLM
+let clean = text.trim();
+
+clean = clean.replace(/^```json\s*/i, "");
+clean = clean.replace(/^```\s*/i, "");
+clean = clean.replace(/```$/i, "").trim();
+
+// استخراج أول JSON صالح
+const start = clean.indexOf("{");
+const end = clean.lastIndexOf("}");
+
+if (start !== -1 && end !== -1) {
+  clean = clean.slice(start, end + 1);
+}
+
+console.log("===== CLEAN JSON =====");
+console.log(clean);
+
+try {
+
+const plan = JSON.parse(clean);
+
+plan.tasks ??= [];
+plan.routes ??= [];
+plan.pages ??= [];
+plan.entities ??= [];
+plan.architecture ??= {};
+
+if (Array.isArray(plan.tasks)) {
+
+plan.tasks = plan.tasks.filter(task => {
+
+  if (!task?.id || !task?.agent) {
+    return false;
+  }
+
+  if (existingTaskIds.has(task.id)) {
+    return false;
+  }
+
+  return true;
+
+});
+
+}
+
+for (const task of plan.tasks || []) {
+
+  task.dependsOn ??= [];
+
+}
+
+const validIds = new Set(
+  (plan.tasks || []).map(t => t.id)
+);
+
+for (const task of plan.tasks) {
+
+  task.dependsOn = task.dependsOn.filter(
+    dep =>
+      existingTaskIds.has(dep) ||
+      validIds.has(dep)
+  );
+
+}
+
+for (const task of plan.tasks || []) {
+
+  task.type ??= "agent";
+
+}
+
+for (const task of plan.tasks || []) {
+
+  task.priority ??= 5;
+  task.cost ??= 1;
+  task.estimatedTime ??= 1;
+
+}
+
 if (context?.workspaceId) {
 
   await updateWorkspaceMemory(context.workspaceId, {
@@ -438,6 +638,18 @@ if (context?.workspaceId) {
   );
 }
 
+if (!plan.tasks.some(t => t.type === "synthesis")) {
+
+  plan.tasks.push({
+    id: "final_output",
+    type: "synthesis",
+    dependsOn: plan.tasks
+      .filter(t => t.agent === "critic")
+      .map(t => t.id)
+  });
+
+}
+
 return {
   ok: true,
   intent: plan.intent,
@@ -446,7 +658,9 @@ return {
   routes: plan.routes || [],
   pages: plan.pages || [],
   entities: plan.entities || [],
-  tasks: plan.tasks || []
+  tasks: Array.isArray(plan.tasks)
+    ? plan.tasks
+    : []
 };
 } catch (e) {
 
@@ -457,7 +671,7 @@ return {
 
   console.error(
     "[PLANNER RAW]",
-    text
+    clean
   );
 
   return {

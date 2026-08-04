@@ -15,18 +15,32 @@ import {
 } from "./taskGraph.js";
 
 import { getTool } from "./toolRegistry.js";
-import { selectBestAgent } from "./selectBestAgent.js";
 import { runAgent } from "./agentRouter.js";
 import { writeWorkspaceFile } from "./workspaceFs.js";
 import { normalizeOutput } from "./utils/normalizeOutput.js";
 import { shouldUseLLM } from "./llmGate.js";
 import { getAgent } from "./agentRegistry.js";
 import { runtimeReflectionLoop } from "./runtimeReflectionLoop.js";
+import { publishKnowledge } from "./sharedWorkspaceBus.js";
+import { scheduleTasks } from "./taskScheduler.js";
 
 // ================= GLOBAL EXECUTION CACHE =================
 const executionCache = new Map();
 
 // ================= HASH TASK =================
+function compactOutput(data = {}) {
+  return {
+    ...data,
+
+    files: (data.files || []).map(file => ({
+      path: file.path,
+      size: file.content
+        ? Buffer.byteLength(file.content, "utf8")
+        : 0
+    }))
+  };
+}
+
 function hashTask(task, context) {
   return crypto
     .createHash("md5")
@@ -60,6 +74,46 @@ function shouldSkipExecution(task) {
 // ================= EXECUTION ENGINE =================
 export async function executeTasks(tasks = [], runtimeContext = {}) {
 
+// ================= AUTO INSERT CRITIC =================
+const hasCritic = tasks.some(
+  t => t.agent === "critic"
+);
+
+const hasFinal = tasks.some(
+  t => t.type === "synthesis"
+);
+
+// هل توجد مهام توليد مشروع؟
+const hasBuildAgents = tasks.some(t =>
+  t.type === "agent" &&
+  [
+    "planner",
+    "frontend",
+    "backend",
+    "architect",
+    "repair"
+  ].includes(t.agent)
+);
+
+if (!hasCritic && hasFinal && hasBuildAgents) {
+
+  const finalTask = tasks.find(
+    t => t.type === "synthesis"
+  );
+
+  const deps = finalTask?.dependsOn || [];
+
+  tasks.push({
+    id: "critic_1",
+    type: "agent",
+    agent: "critic",
+    input: "Review generated workspace",
+    dependsOn: deps
+  });
+
+  finalTask.dependsOn = ["critic_1"];
+}
+
   const graph = createTaskGraph(tasks);
   const runtimeId = crypto.randomUUID();
 
@@ -74,7 +128,11 @@ export async function executeTasks(tasks = [], runtimeContext = {}) {
 
   while (!isGraphDone(graph)) {
 
-    const readyTasks = getReadyTasks(graph);
+    const readyTasks = scheduleTasks(
+      getReadyTasks(graph),
+      graph,
+      runtimeContext
+    );
     if (!readyTasks.length) break;
 
     await Promise.all(
@@ -128,17 +186,15 @@ export async function executeTasks(tasks = [], runtimeContext = {}) {
           // ================= AGENT EXECUTION =================
           else if (task.type === "agent") {
 
-            const selected = task.agent
-              ? { name: task.agent }
-              : await selectBestAgent({
-                  input: task.input,
-                  intent: runtimeContext.intent,
-                  hint: task.hint
-                });
+if (!task.agent) {
+  throw new Error("Task has no assigned agent");
+}
 
-            if (!selected?.name) {
-              throw new Error("No agent selected");
-            }
+const selected = getAgent(task.agent);
+
+if (!selected) {
+    throw new Error(`Agent '${task.agent}' not found`);
+}
 
             const dependencyResults =
               (task.dependsOn || []).map(depId => ({
@@ -181,14 +237,29 @@ if (shouldForceLLM(task, runtimeContext)) {
               res = await agent.execute({
 input: {
   original: runtimeContext.originalPrompt || task.input,
+
   instruction: task.input,
-  dependencies: dependencyResults
+
+  dependencies: dependencyResults,
+
+  previousResults: results,
+
+  graph: graph
 },
 context: {
   role: task.role,
   task,
 
+  planner: runtimeContext.planner,
+
   workspaceId: runtimeContext.workspaceId,
+
+  workspace: runtimeContext.workspace,
+
+  runtimeGraph: graph,
+
+  previousResults: results,
+
   traceId: runtimeContext.traceId,
 
   intent: runtimeContext.intent,
@@ -228,14 +299,29 @@ console.log(
                 agent: selected.name,
 input: {
   original: runtimeContext.originalPrompt || task.input,
+
   instruction: task.input,
-  dependencies: dependencyResults
+
+  dependencies: dependencyResults,
+
+  previousResults: results,
+
+  graph: graph
 },
 context: {
   role: task.role,
   task,
 
+  planner: runtimeContext.planner,
+
   workspaceId: runtimeContext.workspaceId,
+
+  workspace: runtimeContext.workspace,
+
+  runtimeGraph: graph,
+
+  previousResults: results,
+
   traceId: runtimeContext.traceId,
 
   intent: runtimeContext.intent,
@@ -249,11 +335,22 @@ context: {
               });
             }
 
+console.log(
+  `[RAW ${selected.name.toUpperCase()} RESULT]`,
+  JSON.stringify(compactOutput(res), null, 2)
+);
+
             output = normalizeOutput(res);
 
-            // ================= CACHE STORE =================
-            executionCache.set(cacheKey, output);
+console.log(
+  `[NORMALIZED ${selected.name.toUpperCase()} RESULT]`,
+  JSON.stringify(compactOutput(output), null, 2)
+);
 
+            // ================= CACHE STORE =================
+if (output?.ok) {
+  executionCache.set(cacheKey, output);
+}
             // ================= FILE OUTPUT =================
             const files =
               output?.files ||
@@ -269,12 +366,34 @@ context: {
                 });
               }
             }
+
+if (
+  runtimeContext.workspaceId &&
+  (
+    output.pages ||
+    output.routes ||
+    output.entities ||
+    output.architecture
+  )
+) {
+  await publishKnowledge(
+    runtimeContext.workspaceId,
+    selected.name,
+    {
+      pages: output.pages || [],
+      routes: output.routes || [],
+      entities: output.entities || [],
+      architecture: output.architecture || {}
+    }
+  );
+}
           }
 
           // ================= SYNTHESIS =================
 else if (task.type === "synthesis") {
 
-  const nodes = Object.values(graph.nodes);
+  const nodes = Object.values(graph.nodes)
+    .filter(n => n.id !== task.id);
 
   const files = nodes
     .flatMap(n => n.result?.files || []);
@@ -308,15 +427,37 @@ else if (task.type === "synthesis") {
             output = { ok: false, result: "unknown task type" };
           }
 
-          completeTask(graph, task.id, output);
+if (output?.ok === false) {
 
-          await updateRuntimeState(runtimeId, { graph });
+  failTask(
+    graph,
+    task.id,
+    output.error || "agent_failed"
+  );
 
-          results.push({
-            taskId: task.id,
-            status: "done",
-            output
-          });
+console.log("[TASK FAILED]", task.id, output.error);
+
+  await updateRuntimeState(runtimeId, { graph });
+
+  results.push({
+    taskId: task.id,
+    status: "failed",
+    error: output.error,
+    output
+  });
+
+  return;
+}
+
+completeTask(graph, task.id, output);
+
+await updateRuntimeState(runtimeId, { graph });
+
+results.push({
+  taskId: task.id,
+  status: "done",
+  output
+});
 
         } catch (err) {
 
@@ -346,53 +487,51 @@ const critic = results.find(r => {
   return node?.agent === "critic";
 });
 
-if (critic?.output?.data?.repair) {
-
-  const issues = critic.output.data.issues || [];
-
-  for (const issue of issues) {
-
-    if (issue.type === "missing_frontend_login") {
-
-      if (graph.nodes["frontend_1"]) {
-        graph.nodes["frontend_1"].input =
-          "create Login.jsx with React hooks + validation";
-      }
-    }
-
-    if (issue.type === "missing_backend_server") {
-
-      if (graph.nodes["backend_1"]) {
-        graph.nodes["backend_1"].input =
-          "create production Express server with auth routes";
-      }
-    }
-
-    if (issue.meta?.route) {
-
-      const backendNode = graph.nodes["backend_1"];
-
-      if (backendNode) {
-        backendNode.input +=
-          `\nensure route ${issue.meta.route}`;
-      }
-    }
-  }
-}
-
 if (critic?.output) {
 
-  await runtimeReflectionLoop({
+await runtimeReflectionLoop({
     graph,
     criticResult: critic.output,
 
-rerunTask: async () => {
-  // Reflection adds tasks directly to graph.
-  return true;
-},
-    updatePlan: async () => {}
-  });
+    rerunTask: async () => true,
 
+    updatePlan: async (patch) => {
+
+        const planner = getAgent("planner");
+
+        if (!planner) return;
+
+        const repairedPlan =
+            await planner.execute({
+
+                input: {
+                    original: runtimeContext.originalPrompt,
+                    instruction:
+                        "Repair execution graph",
+                    critic: critic.output.data,
+                    graph
+                },
+
+                context: runtimeContext
+
+            });
+
+        if (repairedPlan?.tasks) {
+
+            for (const task of repairedPlan.tasks) {
+                addTask(graph, task);
+            }
+
+        }
+
+    }
+
+});
+
+}
+
+if (!isGraphDone(graph)) {
+  console.warn("[RUNTIME] Graph stopped with unfinished tasks.");
 }
 
 const finalFiles = Object.values(graph.nodes)

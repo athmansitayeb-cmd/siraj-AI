@@ -1,22 +1,32 @@
-import { getAgent } from "./agentRegistry.js";
+import {
+  getAgent,
+  resolveAgent,
+  registerDynamicAgent
+} from "./agentRegistry.js";
 import { runAgent } from "./agentRouter.js";
 
 export async function delegateTask({ from, to, task, context = {} }) {
 
-  const agent = getAgent(to);
+let agent =
+  getAgent(to) ||
+  resolveAgent(task);
 
-  if (!agent) {
-    return {
-      from,
-      to,
-      task,
-      error: "AGENT_NOT_FOUND"
-    };
-  }
+if (!agent && to) {
+  agent = registerDynamicAgent(to);
+}
+
+if (!agent) {
+  return {
+    from,
+    to,
+    task,
+    error: "NO_AGENT_AVAILABLE"
+  };
+}
 
   try {
     const result = await runAgent({
-      agent: to,
+      agent: agent.name,
       input: task,
       context
     });

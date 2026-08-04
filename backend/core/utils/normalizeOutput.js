@@ -1,45 +1,86 @@
-export function normalizeOutput(res) {
+export function normalizeOutput(input) {
 
-  if (!res) {
+  if (!input) {
     return {
       ok: false,
-      text: "empty output",
+      text: "",
       data: {},
-      files: []
+      files: [],
+      tasks: [],
+      routes: [],
+      pages: [],
+      entities: [],
+      architecture: {}
     };
   }
 
-  if (typeof res === "string") {
+  if (typeof input === "string") {
     return {
       ok: true,
-      text: res,
+      text: input,
       data: {},
-      files: []
+      files: [],
+      tasks: [],
+      routes: [],
+      pages: [],
+      entities: [],
+      architecture: {}
     };
   }
 
-return {
-  ok: res.ok ?? true,
+  const payload = input.result || input.data || input;
 
-  text:
-    res.text ||
-    res.summary ||
-    res.message ||
-    "",
+  return {
 
-  data:
-    res.data ||
-    res.result ||
-    {},
+    ...input,
 
-  files: res.files || [],
+    ok: input.ok ?? true,
 
-  tasks: res.tasks || [],
+    text:
+      payload.text ??
+      payload.summary ??
+      payload.message ??
+      payload.content ??
+      "",
 
-  intent: res.intent,
+    data: payload,
 
-  complexity: res.complexity,
+    files:
+      Array.isArray(payload.files)
+        ? payload.files
+        : Array.isArray(input.files)
+          ? input.files
+          : [],
 
-  architecture: res.architecture
-};
+    tasks:
+      Array.isArray(payload.tasks)
+        ? payload.tasks
+        : [],
+
+    routes:
+      Array.isArray(payload.routes)
+        ? payload.routes
+        : [],
+
+    pages:
+      Array.isArray(payload.pages)
+        ? payload.pages
+        : [],
+
+    entities:
+      Array.isArray(payload.entities)
+        ? payload.entities
+        : [],
+
+    architecture:
+      payload.architecture || {},
+
+    intent:
+      payload.intent,
+
+    complexity:
+      payload.complexity
+
+  };
+
 }

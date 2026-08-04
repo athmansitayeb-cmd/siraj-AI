@@ -11,7 +11,23 @@ import { writeWorkspaceFile }
 import { normalizeAgentOutput }
   from "./utils/agentOutputNormalizer.js";
 
+import { readKnowledge } from "./sharedWorkspaceBus.js";
+import { listWorkspaceFiles } from "./workspaceFs.js";
+
 // ================= ROUTER =================
+function compactOutput(data = {}) {
+  return {
+    ...data,
+
+    files: (data.files || []).map(file => ({
+      path: file.path,
+      size: file.content
+        ? Buffer.byteLength(file.content, "utf8")
+        : 0
+    }))
+  };
+}
+
 export async function runAgent({
   agent,
   input,
@@ -28,6 +44,28 @@ export async function runAgent({
 
   const memory = await getAgentMemory(agent);
 
+let workspaceKnowledge =
+  context.workspace?.knowledge || [];
+
+let workspaceFiles =
+  context.workspace?.files || [];
+
+if (
+  context.workspaceId &&
+  workspaceKnowledge.length === 0
+) {
+  workspaceKnowledge =
+    await readKnowledge(context.workspaceId);
+}
+
+if (
+  context.workspaceId &&
+  workspaceFiles.length === 0
+) {
+  workspaceFiles =
+    await listWorkspaceFiles(context.workspaceId);
+}
+
   const specialization =
     memory.specialization || {};
 
@@ -35,20 +73,35 @@ export async function runAgent({
     memory.successes -
     memory.failures * 0.5;
 
-  const enrichedContext = {
+const enrichedContext = {
 
-    ...context,
+  ...context,
 
-    agentMeta: {
-      name: agent,
-      score,
-      runs: memory.runs,
-      specialization
-    },
+workspace: {
 
-    agentMemory: memory
+  ...(context.workspace || {}),
 
-  };
+  files: workspaceFiles,
+
+  knowledge: workspaceKnowledge
+
+},
+
+  agentMeta: {
+
+    name: agent,
+
+    score,
+
+    runs: memory.runs,
+
+    specialization
+
+  },
+
+  agentMemory: memory
+
+};
 
   const startedAt = Date.now();
 
@@ -59,16 +112,33 @@ export async function runAgent({
       context: enrichedContext
     });
 
+console.log(
+  "[RAW AGENT EXECUTE]",
+  JSON.stringify(compactOutput(rawResult), null, 2)
+);
+
     const result =
       normalizeAgentOutput(rawResult);
 
-    if (
-      !result.text &&
-      !Object.keys(result.data || {}).length &&
-      !(result.files || []).length
-    ) {
-      throw new Error("Agent returned empty output");
-    }
+console.log(
+  "[NORMALIZED AGENT]",
+  JSON.stringify(compactOutput(result), null, 2)
+);
+
+const hasContent =
+  !!result.text ||
+  Object.keys(result.data || {}).length > 0 ||
+  (result.files?.length || 0) > 0 ||
+  (result.tasks?.length || 0) > 0 ||
+  (result.routes?.length || 0) > 0 ||
+  (result.pages?.length || 0) > 0 ||
+  (result.entities?.length || 0) > 0 ||
+  (result.architecture &&
+   Object.keys(result.architecture).length > 0);
+
+if (!hasContent) {
+  throw new Error("Agent returned empty output");
+}
 
     if (context.workspaceId) {
 
@@ -77,7 +147,7 @@ export async function runAgent({
         workspaceId: context.workspaceId,
 
         file:
-          `logs/${agent}_${Date.now()}.json`,
+          `logs/${context.traceId || "runtime"}_${agent}_${Date.now()}.json`,
 
         content:
           JSON.stringify(result, null, 2)
@@ -121,6 +191,11 @@ export async function runAgent({
 
     });
 
+const memory = await getAgentMemory(agent);
+
+memory.lastDuration = Date.now() - startedAt;
+memory.lastSuccess = Date.now();
+
     if (context.workspaceId) {
 
       await writeWorkspaceFile({
@@ -128,7 +203,7 @@ export async function runAgent({
         workspaceId: context.workspaceId,
 
         file:
-          `logs/${agent}_error_${Date.now()}.json`,
+          `logs/${context.traceId || "runtime"}_${agent}_error_${Date.now()}.json`,
 
         content: JSON.stringify({
 

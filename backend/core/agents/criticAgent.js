@@ -3,6 +3,7 @@ import {
   readWorkspaceFile,
   listWorkspaceFiles
 } from "../workspaceFs.js";
+import { groq } from "../groqClient.js";
 import { getWorkspaceMemory } from "../workspaceMemory.js";
 import { readKnowledge } from "../sharedWorkspaceBus.js";
 
@@ -23,7 +24,13 @@ registerAgent("critic", {
 
     const memory = await getWorkspaceMemory(ws);
     const bus = await readKnowledge(ws);
-    const latestPlan = bus[bus.length - 1]?.data;
+const plannerKnowledge =
+  [...bus]
+    .reverse()
+    .find(k => k.agent === "planner");
+
+const latestPlan =
+  plannerKnowledge?.data || {};
 
 const originalRequest =
   memory?.originalRequest ||
@@ -86,38 +93,40 @@ for (const file of frontendFiles) {
 const pages = [
   ...(memory?.pages || []),
   ...(latestPlan?.pages || [])
-]
-.filter(Boolean)
-.filter((v, i, a) => a.indexOf(v) === i);
+].filter(Boolean);
 
-for (const page of pages) {
+const uniquePages = [
+  ...new Map(
+    pages.map(page => [
+      `${page?.name}:${page?.route}`,
+      page
+    ])
+  ).values()
+];
+
+for (const page of uniquePages) {
+
+const pageName =
+  typeof page === "string"
+    ? page
+    : page.name;
 
 const exists = workspaceFiles.some(file =>
-  file.endsWith(`/${page}.jsx`)
+  file.endsWith(`/${pageName}.jsx`)
 );
 
 if (!exists) {
-
-    addIssue(
-      "missing_page",
-      "high",
-      `Generate page ${page}`
-    );
-
-  }
+  addIssue(
+    "missing_page",
+    "high",
+    `Generate page ${pageName}`
+  );
+}
 
 }
 
-    // ================= REACT CHECK =================
-    if (frontend && !frontend.includes("useState")) {
-      addIssue(
-        "frontend_not_reactive",
-        "low",
-        "Add React state hooks"
-      );
-    }
-
     // ================= ROUTES VALIDATION =================
+
 const routes = [
   ...(memory?.routes || []),
   ...(latestPlan?.routes || [])
@@ -125,58 +134,63 @@ const routes = [
 .filter(Boolean)
 .filter((v, i, a) => a.indexOf(v) === i);
 
-    for (const route of routes) {
+for (let i = 0; i < routes.length; i++) {
 
-const routeName = route
-  .replace(/\//g, "")
-  .toLowerCase();
+  const route = routes[i];
 
-const routeExists = workspaceFiles.some(file =>
-  file.toLowerCase().includes(routeName)
-);
+const expectedPage =
+  pages.find(page => {
 
-if (!routeExists) {
+    if (typeof page === "string") {
+      return false;
+    }
 
-  addIssue(
-    "frontend_missing_route",
-    "medium",
-    `Generate page for ${route}`,
-    { route }
-  );
+    return page.route === route;
+
+  });
+
+  if (expectedPage) {
+
+    const pageExists = workspaceFiles.some(file =>
+      file.toLowerCase().endsWith(
+        `/${expectedPage.name.toLowerCase()}.jsx`
+      )
+    );
+
+    if (!pageExists) {
+      addIssue(
+        "frontend_missing_page",
+        "high",
+        `Generate page ${expectedPage.name}`,
+        {
+          route,
+          page: expectedPage.name
+        }
+      );
+    }
+  }
+
+  const normalizedBackend =
+    backend
+      ?.replace(/\s+/g, "")
+      ?.toLowerCase() || "";
+
+  if (
+    backend &&
+    !normalizedBackend.includes(
+      route.replace(/\s+/g, "").toLowerCase()
+    )
+  ) {
+    addIssue(
+      "backend_missing_route",
+      "critical",
+      `Implement endpoint ${route}`,
+      { route }
+    );
+  }
 
 }
-
-const normalizedBackend =
-  backend
-    ?.replace(/\s+/g, "")
-    ?.toLowerCase() || "";
-
-if (
-  backend &&
-  !normalizedBackend.includes(
-    route.replace(/\s+/g, "").toLowerCase()
-  )
-) {
-        addIssue(
-          "backend_missing_route",
-          "critical",
-          `Implement endpoint ${route}`,
-          { route }
-        );
-      }
-    }
-
     // ================= ENTITY VALIDATION =================
-    if (memory?.entities?.includes("User")) {
-
-      if (backend && !backend.includes("users")) {
-        addIssue(
-          "user_entity_not_implemented",
-          "high",
-          "Create users array or DB model"
-        );
-      }
-    }
 
 const entities = [
   ...(memory?.entities || []),
@@ -201,6 +215,67 @@ for (const entity of entities) {
   }
 
 }
+
+const review = await groq.chat.completions.create({
+  model: "llama-3.3-70b-versatile",
+  temperature: 0,
+  messages: [
+    {
+      role: "system",
+      content: `
+You are SIRAJ Quality Critic.
+
+Review the generated software.
+
+Return ONLY JSON.
+
+{
+  "issues":[
+    {
+      "agent":"backend",
+      "severity":"critical",
+      "description":"",
+      "fix":""
+    }
+  ]
+}
+`
+    },
+    {
+      role: "user",
+      content: JSON.stringify({
+        request: originalRequest,
+        files: workspaceFiles,
+        backend,
+        frontend
+      })
+    }
+  ]
+});
+
+try {
+
+  const ai = JSON.parse(
+    review.choices[0].message.content
+  );
+
+  if (Array.isArray(ai.issues)) {
+    issues.push(...ai.issues);
+  }
+
+} catch {}
+
+const unique = new Map();
+
+for (const issue of issues) {
+  unique.set(
+    `${issue.agent}:${issue.fix || issue.description || issue.type}`,
+    issue
+  );
+}
+
+issues.length = 0;
+issues.push(...unique.values());
 
     // ================= FINAL DECISION =================
     const critical = issues.filter(i => i.severity === "critical");

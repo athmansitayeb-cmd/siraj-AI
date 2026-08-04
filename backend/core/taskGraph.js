@@ -4,19 +4,30 @@ export function createTaskGraph(tasks = []) {
   const nodes = {};
   const edges = {};
 
-  for (const task of tasks) {
+for (const task of tasks) {
 
-    nodes[task.id] = {
-      ...task,
-      status: "pending",
-      retries: 0,
-      result: null,
-      error: null,
-      createdAt: Date.now()
-    };
+  nodes[task.id] = {
+    ...task,
+    status: "pending",
+    retries: 0,
+    result: null,
+    error: null,
 
-    edges[task.id] = task.dependsOn || [];
-  }
+    priority: task.priority ?? 5,
+    cost: task.cost ?? 1,
+    estimatedTime: task.estimatedTime ?? 1,
+
+    createdAt: Date.now()
+  };
+
+}
+
+for (const task of tasks) {
+
+  edges[task.id] = (task.dependsOn || [])
+    .filter(dep => dep in nodes);
+
+}
 
   const graph = {
     nodes,
@@ -24,7 +35,8 @@ export function createTaskGraph(tasks = []) {
     meta: {
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      nodeCount: Object.keys(nodes).length
+      nodeCount: Object.keys(nodes).length,
+      reflectionCount: 0
     }
   };
 
@@ -87,9 +99,11 @@ export function failTask(graph, id, error) {
 // ================= DONE CHECK =================
 export function isGraphDone(graph) {
 
-  return Object.values(graph.nodes).every(node =>
-    node.status !== "pending" &&
-    node.status !== "running"
+  const nodes = Object.values(graph.nodes);
+
+  return nodes.every(node =>
+    node.status === "done" ||
+    node.status === "failed"
   );
 
 }
@@ -150,16 +164,22 @@ export function addTask(graph, task) {
     return false;
   }
 
-  graph.nodes[task.id] = {
-    ...task,
-    status: "pending",
-    retries: 0,
-    result: null,
-    error: null,
-    createdAt: Date.now()
-  };
+graph.nodes[task.id] = {
+  ...task,
+  status: "pending",
+  retries: 0,
+  result: null,
+  error: null,
 
-  graph.edges[task.id] = task.dependsOn || [];
+  priority: task.priority ?? 5,
+  cost: task.cost ?? 1,
+  estimatedTime: task.estimatedTime ?? 1,
+
+  createdAt: Date.now()
+};
+
+graph.edges[task.id] = (task.dependsOn || [])
+  .filter(dep => dep in graph.nodes);
 
   detectCycles(graph);
 

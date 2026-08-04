@@ -39,7 +39,12 @@ registerAgent("assistant", {
 
   async execute({ input, context }) {
 
-    const raw = String(input?.original || input || "");
+const raw = String(
+  input?.original ||
+  input?.instruction ||
+  input ||
+  ""
+).trim();
 
 const systemPrompt =
   context?.systemPrompt || {
@@ -62,6 +67,12 @@ const systemPrompt =
     const fast = tryFastReply(raw);
     if (fast) {
       cache.set(key, fast);
+
+if (cache.size > 500) {
+  const first = cache.keys().next().value;
+  cache.delete(first);
+}
+
       return {
         ok: true,
         text: fast,
@@ -89,12 +100,19 @@ const systemPrompt =
 
     cache.set(key, content);
 
+if (cache.size > 500) {
+  const first = cache.keys().next().value;
+  cache.delete(first);
+}
+
     return {
       ok: true,
       text: content,
-      data: {
-        raw: completion
-      }
+data: {
+  model: "llama-3.3-70b-versatile",
+  finishReason:
+    completion?.choices?.[0]?.finish_reason || "stop"
+}
     };
   }
 });

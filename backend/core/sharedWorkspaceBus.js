@@ -5,19 +5,26 @@ export async function publishKnowledge(workspaceId, agent, data) {
 
   const memory = await getWorkspaceMemory(workspaceId);
 
-  const shared = Array.isArray(memory.sharedContext)
-    ? memory.sharedContext
-    : [];
+const shared = Array.isArray(memory.sharedContext)
+  ? [...memory.sharedContext]
+  : [];
 
-  shared.push({
-    agent,
-    data,
-    ts: Date.now()
-  });
+shared.push({
+  agent,
+  data,
+  ts: Date.now()
+});
 
-  await updateWorkspaceMemory(workspaceId, {
-    sharedContext: shared
-  });
+// احتفظ بآخر 100 حدث فقط
+const MAX_EVENTS = 100;
+
+while (shared.length > MAX_EVENTS) {
+  shared.shift();
+}
+
+await updateWorkspaceMemory(workspaceId, {
+  sharedContext: shared
+});
 
   return true;
 }
