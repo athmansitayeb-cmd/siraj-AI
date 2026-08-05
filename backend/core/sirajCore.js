@@ -12,11 +12,22 @@ export function buildSirajCore({ convo, msg, memory = {}, reasoning = {}, focus 
   else if (/ليش|ظلم|ليش أنا/.test(text)) state = "frustration";
 
   // ================= INTENT =================
-  let intent = "general";
+let intent = "conversation";
 
-  if (/كيف|اشرح|ماهو/.test(text)) intent = "learn";
-  else if (/مشكلة|bug|خطأ/.test(text)) intent = "debug";
-  else if (/ابدأ|خطة|نفذ/.test(text)) intent = "execute";
+if (
+  /(build|create|generate|develop|design|software|system|project|application|website|dashboard|frontend|backend|database|api|crm|saas|platform|أنشئ|ابن|اصنع|طور|صمم|مشروع|تطبيق|موقع|واجهة|قاعدة بيانات|برمج)/i.test(text)
+) {
+  intent = "software";
+}
+else if (/كيف|اشرح|ماهو|لماذا|what|why|how/i.test(text)) {
+  intent = "learn";
+}
+else if (/مشكلة|bug|خطأ|error|fix|repair/i.test(text)) {
+  intent = "debug";
+}
+else if (/ابدأ|خطة|نفذ/i.test(text)) {
+  intent = "execute";
+}
 
   // ================= MODE (خفيف بدون فرض سلوك) =================
   let mode = "adaptive";

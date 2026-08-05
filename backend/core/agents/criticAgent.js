@@ -227,18 +227,55 @@ You are SIRAJ Quality Critic.
 
 Review the generated software.
 
-Return ONLY JSON.
+Return ONLY valid JSON.
 
 {
   "issues":[
     {
-      "agent":"backend",
+      "agent":"frontend",
+      "file":"frontend/Login.jsx",
       "severity":"critical",
       "description":"",
       "fix":""
     }
   ]
 }
+
+Rules:
+
+Every issue MUST contain:
+
+agent
+
+file
+
+severity
+
+description
+
+fix
+
+Examples:
+
+Missing Login page
+
+agent=frontend
+
+file=frontend/Login.jsx
+
+Missing Express endpoint
+
+agent=backend
+
+file=backend/server.js
+
+Missing database schema
+
+agent=database
+
+file=database/schema.sql
+
+Return JSON only.
 `
     },
     {
@@ -260,7 +297,20 @@ try {
   );
 
   if (Array.isArray(ai.issues)) {
-    issues.push(...ai.issues);
+
+    for (const issue of ai.issues) {
+
+      issue.agent ??= "backend";
+
+      issue.file ??=
+        issue.agent === "frontend"
+          ? "frontend/App.jsx"
+          : "backend/server.js";
+
+      issues.push(issue);
+
+    }
+
   }
 
 } catch {}
@@ -268,27 +318,31 @@ try {
 const unique = new Map();
 
 for (const issue of issues) {
+
   unique.set(
-    `${issue.agent}:${issue.fix || issue.description || issue.type}`,
+    `${issue.agent}:${issue.file}:${issue.fix || issue.description || issue.type}`,
     issue
   );
+
 }
 
 issues.length = 0;
 issues.push(...unique.values());
 
-    // ================= FINAL DECISION =================
-    const critical = issues.filter(i => i.severity === "critical");
+// ================= FINAL DECISION =================
 
-    const verdict =
-      critical.length > 0
-        ? "rejected"
-        : issues.length > 0
-          ? "warning"
-          : "approved";
+const critical =
+  issues.filter(i => i.severity === "critical");
 
-    return {
-      ok: verdict === "approved",
+const verdict =
+  critical.length > 0
+    ? "rejected"
+    : issues.length > 0
+      ? "warning"
+      : "approved";
+
+return {
+  ok: verdict === "approved",
 
       data: {
         originalRequest,

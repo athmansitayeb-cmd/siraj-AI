@@ -1,5 +1,8 @@
 import { registerAgent } from "../agentRegistry.js";
 import { CodeAgent } from "../CodeAgent.js";
+import {
+  readWorkspaceFile
+} from "../workspaceFs.js";
 
 const agent = new CodeAgent({
   name: "repair",
@@ -7,15 +10,15 @@ const agent = new CodeAgent({
   role: `
 You are a senior software repair engineer.
 
-Your job is to repair existing code.
+Repair existing code.
 
 Never recreate files.
 
 Never remove working code.
 
-Only apply the requested fix.
+Only modify what the task asks.
 
-Return code only.
+Return ONLY the full updated file.
 `
 });
 
@@ -23,20 +26,57 @@ registerAgent("repair", {
 
   description: "Automatic code repair agent",
 
-  async execute({ input }) {
+  async execute({ input, context }) {
 
-    const content = await agent.generate({
+    const workspaceId = context?.workspaceId;
+
+    const targetFile =
+      input?.file ||
+      input?.targetFile ||
+      "backend/server.js";
+
+    const current =
+      workspaceId
+        ? await readWorkspaceFile({
+            workspaceId,
+            file: targetFile
+          })
+        : "";
+
+    const repaired = await agent.generate({
+
+      workspaceId,
+
       input: {
         task: input?.instruction || "",
         userRequest: input?.original || "",
+
+        currentFile: current || "",
+
         dependencies: input?.dependencies || []
       }
+
     });
 
     return {
+
       ok: true,
-      files: [],
-      text: content
+
+      files: [
+
+        {
+
+          path: targetFile,
+
+          content:
+            repaired && repaired.trim().length > 50
+              ? repaired
+              : current
+
+        }
+
+      ]
+
     };
 
   }

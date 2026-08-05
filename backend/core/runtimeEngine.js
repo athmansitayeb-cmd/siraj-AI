@@ -206,11 +206,19 @@ if (!selected) {
 function shouldForceLLM(task, context) {
 
   const input = task?.input || "";
+  const lower = String(input).toLowerCase();
 
   // critical reasoning tasks
   if (task.type === "synthesis") return true;
 
-  if (input.includes("fix") || input.includes("error")) return true;
+if (
+    lower.includes("fix") ||
+    lower.includes("repair") ||
+    lower.includes("bug") ||
+    lower.includes("error")
+) {
+    return true;
+}
 
   if ((task.dependsOn || []).length > 1) return true;
 
@@ -349,7 +357,13 @@ console.log(
 
             // ================= CACHE STORE =================
 if (output?.ok) {
-  executionCache.set(cacheKey, output);
+executionCache.set(cacheKey, output);
+
+if (executionCache.size > 500) {
+    executionCache.delete(
+        executionCache.keys().next().value
+    );
+}
 }
             // ================= FILE OUTPUT =================
             const files =
@@ -482,12 +496,20 @@ results.push({
   });
 
 // ================= CRITIC REPAIR PATCH =================
+let repairAttempts = 0;
+const MAX_REPAIRS = 2;
+
 const critic = results.find(r => {
   const node = graph.nodes[r.taskId];
   return node?.agent === "critic";
 });
 
-if (critic?.output) {
+if (
+  critic?.output &&
+  repairAttempts < MAX_REPAIRS
+) {
+
+  repairAttempts++;
 
 await runtimeReflectionLoop({
     graph,
@@ -521,6 +543,9 @@ await runtimeReflectionLoop({
             for (const task of repairedPlan.tasks) {
                 addTask(graph, task);
             }
+if (!repairedPlan.tasks.length) {
+    return;
+}
 
         }
 

@@ -575,6 +575,22 @@ plan.tasks = plan.tasks.filter(task => {
 
 });
 
+const seen = new Set();
+
+plan.tasks = plan.tasks.filter(task => {
+
+  const key = `${task.agent}:${task.input}`;
+
+  if (seen.has(key)) {
+    return false;
+  }
+
+  seen.add(key);
+
+  return true;
+
+});
+
 }
 
 for (const task of plan.tasks || []) {

@@ -12,9 +12,8 @@ export function unifiedPlanner({
 
   // ================= SIMPLE CONVERSATION =================
 
-  const simpleConversation =
-    text.length < 40 &&
-    !/(build|create|generate|develop|design|system|architecture|dashboard|api|database|backend|frontend|project|application|app|software|platform|crm|saas|website|أنشئ|ابن|اصنع|طور|صمم|موقع|واجهة|قاعدة|بيانات|تطبيق|مشروع|برمج|API|واجهة برمجة)/i.test(lower)
+const simpleConversation =
+  cognition?.intent === "conversation";
 
   if (simpleConversation) {
 

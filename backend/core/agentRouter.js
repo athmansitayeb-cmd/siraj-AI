@@ -38,6 +38,10 @@ export async function runAgent({
 
   console.log("[ROUTER]", agent, !!target);
 
+if (!target?.execute) {
+  throw new Error(`Agent '${agent}' has no execute() implementation`);
+}
+
   if (!target) {
     throw new Error(`Agent not found: ${agent}`);
   }
@@ -140,21 +144,21 @@ if (!hasContent) {
   throw new Error("Agent returned empty output");
 }
 
-    if (context.workspaceId) {
+if (context.workspaceId && context.traceId) {
 
-      await writeWorkspaceFile({
+  await writeWorkspaceFile({
 
-        workspaceId: context.workspaceId,
+    workspaceId: context.workspaceId,
 
-        file:
-          `logs/${context.traceId || "runtime"}_${agent}_${Date.now()}.json`,
+    file:
+      `logs/${context.traceId}_${agent}_${Date.now()}.json`,
 
-        content:
-          JSON.stringify(result, null, 2)
+    content:
+      JSON.stringify(result, null, 2)
 
-      });
+  });
 
-    }
+}
 
     await recordAgentTask({
 
@@ -196,30 +200,25 @@ const memory = await getAgentMemory(agent);
 memory.lastDuration = Date.now() - startedAt;
 memory.lastSuccess = Date.now();
 
-    if (context.workspaceId) {
+if (context.workspaceId && context.traceId) {
 
-      await writeWorkspaceFile({
+  await writeWorkspaceFile({
 
-        workspaceId: context.workspaceId,
+    workspaceId: context.workspaceId,
 
-        file:
-          `logs/${context.traceId || "runtime"}_${agent}_error_${Date.now()}.json`,
+    file:
+      `logs/${context.traceId}_${agent}_error_${Date.now()}.json`,
 
-        content: JSON.stringify({
+    content: JSON.stringify({
+      agent,
+      input,
+      error: err.message,
+      stack: err.stack
+    }, null, 2)
 
-          agent,
+  });
 
-          input,
-
-          error: err.message,
-
-          stack: err.stack
-
-        }, null, 2)
-
-      });
-
-    }
+}
 
     return {
 
