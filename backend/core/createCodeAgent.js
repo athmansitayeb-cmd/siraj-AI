@@ -15,9 +15,13 @@ export function createCodeAgent(config) {
 
     async execute({ input, context }) {
 
+      const workspaceVersion =
+        context?.workspace?.snapshot?.version || 1;
+
       const knowledge =
         await agent.readWorkspace(
-          context?.workspaceId
+          context?.workspaceId,
+          workspaceVersion
         );
 
       const latest =
@@ -33,6 +37,8 @@ export function createCodeAgent(config) {
 
           workspaceId:
             context?.workspaceId,
+
+          workspaceVersion,
 
           path:
             config.outputPath,

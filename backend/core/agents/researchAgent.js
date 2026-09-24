@@ -88,6 +88,9 @@ ${originalPrompt}
         fallback
       );
 
+    const workspaceVersion =
+      context?.workspace?.snapshot?.version || 1;
+
     await agent.saveWorkspace(
       context?.workspaceId,
       {
@@ -99,12 +102,14 @@ ${originalPrompt}
           result.pages || [],
         entities:
           result.entities || []
-      }
+      },
+      workspaceVersion
     );
 
     await agent.publish(
       context?.workspaceId,
-      result
+      result,
+      workspaceVersion
     );
 
     return {

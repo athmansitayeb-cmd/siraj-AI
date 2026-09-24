@@ -40,18 +40,25 @@ function uniqueItems(arr = []) {
 }
 
 // ================= GET =================
-export async function getWorkspaceMemory(workspaceId) {
+export async function getWorkspaceMemory(
+  workspaceId,
+  workspaceVersion = 1
+) {
 
   const db = await getDB();
 
   let memory = await db
     .collection(COLLECTION)
-    .findOne({ workspaceId });
+    .findOne({
+      workspaceId,
+      workspaceVersion
+    });
 
   if (!memory) {
 
     memory = {
       workspaceId,
+      workspaceVersion,
       ...structuredClone(DEFAULT_MEMORY),
       createdAt: Date.now(),
       updatedAt: Date.now()
@@ -75,8 +82,14 @@ export async function updateWorkspaceMemory(
 
   const db = await getDB();
 
+  const workspaceVersion =
+    patch.workspaceVersion || 1;
+
   const current =
-    await getWorkspaceMemory(workspaceId);
+    await getWorkspaceMemory(
+      workspaceId,
+      workspaceVersion
+    );
 
   const merged = {
 
@@ -141,7 +154,10 @@ sharedContext: [
   };
 
   await db.collection(COLLECTION).updateOne(
-    { workspaceId },
+    {
+      workspaceId,
+      workspaceVersion
+    },
     { $set: merged },
     { upsert: true }
   );

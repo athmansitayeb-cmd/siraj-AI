@@ -2,44 +2,65 @@ import mongoose from "mongoose";
 
 const WorkspaceSchema = new mongoose.Schema({
 
-seo: {
-  indexable: {
-    type: Boolean,
-    default: false
-  },
-  title: String,
-  description: String,
-  slug: String
-},
-
-version: {
-  type: Number,
-  default: 1
-},
-
-lastSessionAt: {
-  type: Date,
-  default: Date.now
-},
+  // ==========================================================
+  // IDENTITY
+  // ==========================================================
 
   userId: {
     type: String,
-    required: true
+    required: true,
+    index: true
+  },
+
+  name: {
+    type: String,
+    required: true,
+    trim: true
   },
 
   intent: {
     type: String,
+    required: true,
+    trim: true
+  },
+
+  description: {
+    type: String,
+    default: ""
+  },
+
+  // ==========================================================
+  // SESSION
+  // ==========================================================
+
+  conversationId: {
+    type: String,
     required: true
   },
 
-conversationId: {
-  type: String,
-  required: true
-},
+  lastSessionAt: {
+    type: Date,
+    default: Date.now
+  },
+
+  messageCount: {
+    type: Number,
+    default: 0
+  },
+
+  // ==========================================================
+  // WORKSPACE STATE
+  // ==========================================================
 
   state: {
     type: String,
-    default: "active"
+    enum: [
+      "active",
+      "paused",
+      "archived"
+    ],
+    default: "active",
+    index: true
   },
 
   funnelState: {
@@ -47,19 +68,67 @@ conversationId: {
     default: "intent_captured"
   },
 
+  // ==========================================================
+  // RUNTIME
+  // ==========================================================
+
+  runtimeState: {
+    type: String,
+    enum: [
+      "idle",
+      "planning",
+      "executing",
+      "reflecting",
+      "repairing",
+      "completed",
+      "failed"
+    ],
+    default: "idle"
+  },
+
+  version: {
+    type: Number,
+    default: 1
+  },
+
+  // ==========================================================
+  // AGENTS
+  // ==========================================================
+
   agents: [{
     name: String,
     role: String,
-    status: String
+    status: {
+      type: String,
+      default: "idle"
+    }
   }],
 
-  messageCount: {
-    type: Number,
-    default: 0
+  // ==========================================================
+  // SEO
+  // ==========================================================
+
+  seo: {
+    indexable: {
+      type: Boolean,
+      default: false
+    },
+
+    title: String,
+
+    description: String,
+
+    slug: {
+      type: String,
+      index: true
+    }
   }
 
 }, {
   timestamps: true
 });
 
-export default mongoose.model("Workspace", WorkspaceSchema);
+export default mongoose.model(
+  "Workspace",
+  WorkspaceSchema
+);

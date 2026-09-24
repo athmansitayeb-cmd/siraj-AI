@@ -1,5 +1,9 @@
 import crypto from "crypto";
-import { addTask, updateTask } from "./taskGraph.js";
+import {
+  addTask,
+  updateTask,
+  resetTask
+} from "./taskGraph.js";
 
 export async function runtimeReflectionLoop({
   graph,
@@ -8,13 +12,16 @@ export async function runtimeReflectionLoop({
   updatePlan
 }) {
 
-graph.meta.reflectionCount =
-(graph.meta.reflectionCount || 0) + 1;
+  graph.meta.reflectionCount =
+    (graph.meta.reflectionCount || 0) + 1;
 
   if (graph.meta.reflectionCount > 3) {
     return {
       ok: false,
-      reason: "max_reflection_reached"
+      reason: "max_reflection_reached",
+      repaired: 0,
+      totalIssues: 0,
+      hasIssues: false
     };
   }
 
@@ -23,129 +30,212 @@ graph.meta.reflectionCount =
     criticResult?.data?.issues ||
     [];
 
+  if (!Array.isArray(issues) || !issues.length) {
+    return {
+      ok: true,
+      repaired: 0,
+      totalIssues: 0,
+      hasIssues: false,
+      reflectionCount:
+        graph.meta.reflectionCount
+    };
+  }
+
   const criticalIssues =
-    issues.filter(i => i.severity === "critical");
+    issues.filter(
+      issue =>
+        issue?.severity === "critical"
+    );
 
-  const injected = new Set(
-    Object.values(graph.nodes).map(
-      n => `${n.agent}:${n.input}`
-    )
-  );
+  // ----------------------------------------------------------
+  // Find the critic that produced the current result
+  // ----------------------------------------------------------
 
-const lastCritic = Object.values(graph.nodes)
-  .filter(n => n.agent === "critic")
-  .sort((a, b) => b.createdAt - a.createdAt)[0];
+  const criticNodes =
+    Object.values(graph.nodes)
+      .filter(
+        node =>
+          node.agent === "critic" &&
+          node.status === "done" &&
+          node.result
+      )
+      .sort(
+        (a, b) =>
+          (b.completedAt || b.createdAt || 0) -
+          (a.completedAt || a.createdAt || 0)
+      );
 
-const depends =
-  lastCritic ? [lastCritic.id] : [];
+  const sourceCritic =
+    criticNodes[0];
 
-const injectedIds = [];
+  const depends =
+    sourceCritic
+      ? [sourceCritic.id]
+      : [];
+
+  // ----------------------------------------------------------
+  // Prevent duplicate repair tasks
+  // ----------------------------------------------------------
+
+  const existingKeys =
+    new Set(
+      Object.values(graph.nodes).map(
+        node =>
+          `${node.agent}:${String(
+            node.input || ""
+          )
+            .trim()
+            .toLowerCase()}`
+      )
+    );
+
+  const injectedIds = [];
 
   function inject(agent, input) {
 
-    const key = `${agent}:${input.trim().toLowerCase()}`;
+    if (!agent || !input) {
+      return;
+    }
 
-    if (injected.has(key)) return;
+    const normalized =
+      String(input)
+        .trim();
 
-    injected.add(key);
+    if (!normalized) {
+      return;
+    }
 
-const id = crypto.randomUUID();
+    const key =
+      `${agent}:${normalized.toLowerCase()}`;
 
-addTask(graph, {
-  id,
-  type: "agent",
-  agent,
-  input,
-  dependsOn: depends
-});
+    if (existingKeys.has(key)) {
+      return;
+    }
 
-injectedIds.push(id);
+    existingKeys.add(key);
 
+    const id =
+      crypto.randomUUID();
+
+    addTask(graph, {
+      id,
+      type: "agent",
+      agent,
+      input: normalized,
+      dependsOn: depends,
+      priority: 8
+    });
+
+    injectedIds.push(id);
   }
 
-// ================= AUTO REPAIR =================
+  // ----------------------------------------------------------
+  // Generate repair tasks
+  // ----------------------------------------------------------
 
-for (const issue of issues) {
+  for (const issue of issues) {
 
-  const agent =
-    issue.agent ||
-    (issue.type?.includes("frontend")
-      ? "frontend"
-      : issue.type?.includes("backend")
-      ? "backend"
-      : "repair");
+    const issueAgent =
+      String(issue?.agent || "").toLowerCase();
 
-  const instruction =
-    issue.fix ||
-    issue.description ||
-    issue.message;
+    const agent =
+      issueAgent === "frontend"
+        ? "frontend"
+        : issueAgent === "backend"
+          ? "backend"
+          : "repair";
 
-  if (!instruction) continue;
+    const instruction =
+      issue?.fix ||
+      issue?.description ||
+      issue?.message;
 
-  inject(agent, instruction);
+    inject(
+      agent,
+      instruction
+    );
+  }
 
-}
+  // ----------------------------------------------------------
+  // If nothing new was injected, stop.
+  // ----------------------------------------------------------
 
-// إذا كانت المشاكل كثيرة اطلب إعادة التخطيط
+  if (!injectedIds.length) {
 
-if (criticalIssues.length >= 3) {
+    return {
+      ok: true,
+      repaired: 0,
+      totalIssues: issues.length,
+      hasIssues: true,
+      reason: "no_new_repair_tasks",
+      reflectionCount:
+        graph.meta.reflectionCount
+    };
+  }
 
-  await updatePlan({
-    improve: true,
-    issues,
-    criticalCount: criticalIssues.length
+  // ----------------------------------------------------------
+  // Verification critic
+  // ----------------------------------------------------------
+
+  const verificationCriticId =
+    crypto.randomUUID();
+
+  addTask(graph, {
+    id: verificationCriticId,
+    type: "agent",
+    agent: "critic",
+    input:
+      `Review the repaired workspace and verify whether the reported issues are completely resolved. Reflection ${graph.meta.reflectionCount}.`,
+    dependsOn: injectedIds,
+    priority: 10
   });
 
-}
+  // ----------------------------------------------------------
+  // Final output must wait for verification critic
+  // ----------------------------------------------------------
 
-  // ================= SECOND CRITIC PASS =================
-
-  if (issues.length > 0 && injectedIds.length > 0) {
-
-const repairTasks = injectedIds;
-
-const criticTask = {
-  id: crypto.randomUUID(),
-  type: "agent",
-  agent: "critic",
-  input: "review repaired workspace",
-  dependsOn: repairTasks
-};
-
-const hasPendingCritic = Object.values(graph.nodes).some(
-  n =>
-    n.agent === "critic" &&
-    (n.status === "pending" || n.status === "running")
-);
-
-if (!hasPendingCritic) {
-    addTask(graph, criticTask);
-}
-
-const finalNode = graph.nodes["final_output"];
+const finalNode =
+  graph.nodes["final_output"];
 
 if (finalNode) {
-  updateTask(graph, finalNode.id, {
-    dependsOn: [criticTask.id]
-  });
-}
 
-if (injectedIds.length) {
-  await updatePlan({
-    improve: true,
-    issues,
-    criticalCount: criticalIssues.length
-  });
-}
+  resetTask(
+    graph,
+    finalNode.id
+  );
 
-  }
+  updateTask(
+    graph,
+    finalNode.id,
+    {
+      dependsOn: [
+        verificationCriticId
+      ]
+    }
+  );
+}
 
   return {
     ok: true,
-    repaired: criticalIssues.length,
-    totalIssues: issues.length,
-    hasIssues: issues.length > 0,
-    reflectionCount: graph.meta.reflectionCount
-  };
 
+    repaired:
+      injectedIds.length,
+
+    totalIssues:
+      issues.length,
+
+    hasIssues:
+      true,
+
+    verificationCriticId,
+
+    repairTaskIds:
+      injectedIds,
+
+    criticalCount:
+      criticalIssues.length,
+
+    reflectionCount:
+      graph.meta.reflectionCount
+  };
 }

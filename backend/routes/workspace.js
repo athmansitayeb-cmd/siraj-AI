@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import express from "express";
 import Workspace from "../models/Workspace.js";
 import verifyToken from "../middleware/auth.js";
+import { loadAgents } from "../core/loadAgents.js";
+import { listAgents, getAgent } from "../core/agentRegistry.js";
 
 const router = express.Router();
 
@@ -32,6 +34,20 @@ router.get(
 router.post("/create", verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
+await loadAgents();
+
+const registeredAgents = listAgents();
+
+const workspaceAgents = registeredAgents.map(name => {
+  const agent = getAgent(name);
+
+  return {
+    name,
+    role: agent?.role || name,
+    status: "available"
+  };
+});
+
     const intent = req.body?.intent;
 
     if (!intent) {
@@ -82,15 +98,36 @@ const slug = intent
 
 const workspace = await Workspace.create({
   userId,
+
+  name: `${intent} Workspace`,
+
   intent,
+
+originalRequest:
+  req.body?.originalRequest ||
+  intent,
+
+  description:
+    `AI workspace for ${intent}`,
+
   conversationId,
+
   state: "active",
+
   funnelState: "workspace_created",
+
+  runtimeState: "idle",
+
   version: 1,
+
   lastSessionAt: new Date(),
 
+  agents: workspaceAgents,
+
+  messageCount: 0,
+
   seo: {
-    indexable: true,
+    indexable: false,
     slug,
     title: `Workspace - ${intent}`,
     description: `AI workspace for ${intent}`

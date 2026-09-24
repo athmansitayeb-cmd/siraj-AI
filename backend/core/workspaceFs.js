@@ -5,19 +5,77 @@ import fsSync from "fs";
 const ROOT = "/opt/siraj/backend/runtime/workspaces";
 
 // ================= PATH GUARD =================
-function safePath(base, target) {
-  const resolved = path.resolve(base, target);
+async function safePath(base, target) {
+  const resolvedBase = await fs.realpath(base);
+  const resolved = path.resolve(resolvedBase, target);
+  const relative = path.relative(resolvedBase, resolved);
 
-  if (!resolved.startsWith(base)) {
+  if (
+    relative !== "" &&
+    (relative.startsWith("..") || path.isAbsolute(relative))
+  ) {
     throw new Error("INVALID_WORKSPACE_PATH");
+  }
+
+  // Reject symlinks in every existing component of the target path.
+  // This prevents escaping the workspace through a symlink.
+  const parts = relative
+    .split(path.sep)
+    .filter(Boolean);
+
+  let current = resolvedBase;
+
+  for (const part of parts) {
+    current = path.join(current, part);
+
+    try {
+      const stat = await fs.lstat(current);
+
+      if (stat.isSymbolicLink()) {
+        throw new Error("INVALID_WORKSPACE_SYMLINK");
+      }
+    } catch (err) {
+      if (err.code === "ENOENT") {
+        // The final file or a new directory does not exist yet.
+        // Existing parent components have already been checked.
+        break;
+      }
+
+      throw err;
+    }
   }
 
   return resolved;
 }
 
+// ================= WORKSPACE ID GUARD =================
+function safeWorkspaceId(workspaceId) {
+  if (
+    typeof workspaceId !== "string" ||
+    !workspaceId.trim()
+  ) {
+    throw new Error("INVALID_WORKSPACE_ID");
+  }
+
+  const id = workspaceId.trim();
+
+  if (
+    id === "." ||
+    id === ".." ||
+    id.includes("/") ||
+    id.includes("\\") ||
+    id.includes("\0")
+  ) {
+    throw new Error("INVALID_WORKSPACE_ID");
+  }
+
+  return id;
+}
+
 // ================= GET PATH =================
 export function getWorkspacePath(workspaceId) {
-  return path.join(ROOT, workspaceId);
+  const id = safeWorkspaceId(workspaceId);
+  return path.join(ROOT, id);
 }
 
 // ================= ENSURE =================
@@ -37,7 +95,7 @@ export async function writeWorkspaceFile({
 }) {
   const workspacePath = await ensureWorkspace(workspaceId);
 
-  const fullPath = safePath(workspacePath, file);
+  const fullPath = await safePath(workspacePath, file);
 
   await fs.mkdir(path.dirname(fullPath), { recursive: true });
 
@@ -54,7 +112,7 @@ export async function readWorkspaceFile({
   try {
     const workspacePath = getWorkspacePath(workspaceId);
 
-    const fullPath = safePath(workspacePath, file);
+    const fullPath = await safePath(workspacePath, file);
 
     const content = await fs.readFile(fullPath, "utf8");
 

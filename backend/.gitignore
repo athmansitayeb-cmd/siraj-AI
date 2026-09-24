@@ -14,3 +14,6 @@ test*
 *.backup.js
 *.bak
 *.save
+
+# Generated SIRAJ runtime workspaces
+runtime/workspaces/

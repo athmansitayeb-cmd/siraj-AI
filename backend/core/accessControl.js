@@ -1,11 +1,11 @@
 export function getAccess(plan) {
   const plans = {
     free: {
-      model: "llama-3.3-70b-versatile",
+      model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
       memory: false
     },
     pro: {
-      model: "llama-3.3-70b-versatile",
+      model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
       memory: true
     }
   };

@@ -32,8 +32,11 @@ registerAgent("architect", {
 
     const ws = context?.workspaceId;
 
+const workspaceVersion =
+  context?.workspace?.snapshot?.version || 1;
+
 const knowledge =
-  await agent.readWorkspace(ws);
+  await agent.readWorkspace(ws, workspaceVersion);
 
 const plannerKnowledge =
   [...knowledge]
@@ -127,12 +130,14 @@ folders: safe.folders,
 modules: safe.modules,
 services: safe.services
 
-      }
+      },
+      workspaceVersion
     );
 
     await agent.publish(
       ws,
-      safe
+      safe,
+      workspaceVersion
     );
 
     return {

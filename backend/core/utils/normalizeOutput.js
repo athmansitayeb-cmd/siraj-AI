@@ -37,11 +37,15 @@ export function normalizeOutput(input) {
     ok: input.ok ?? true,
 
     text:
-      payload.text ??
-      payload.summary ??
-      payload.message ??
-      payload.content ??
-      "",
+      typeof input.text === "string"
+        ? input.text
+        : typeof payload.text === "string"
+          ? payload.text
+          : typeof payload.message === "string"
+            ? payload.message
+            : typeof payload.content === "string"
+              ? payload.content
+              : "",
 
     data: payload,
 

@@ -11,570 +11,1240 @@ import {
   completeTask,
   failTask,
   isGraphDone,
-  addTask
+  addTask,
+  failBlockedTasks,
+  updateTask
 } from "./taskGraph.js";
 
-import { getTool } from "./toolRegistry.js";
-import { runAgent } from "./agentRouter.js";
-import { writeWorkspaceFile } from "./workspaceFs.js";
-import { normalizeOutput } from "./utils/normalizeOutput.js";
-import { shouldUseLLM } from "./llmGate.js";
-import { getAgent } from "./agentRegistry.js";
-import { runtimeReflectionLoop } from "./runtimeReflectionLoop.js";
-import { publishKnowledge } from "./sharedWorkspaceBus.js";
-import { scheduleTasks } from "./taskScheduler.js";
+import {
+  getAgent,
+  listAgents
+} from "./agentRegistry.js";
 
-// ================= GLOBAL EXECUTION CACHE =================
-const executionCache = new Map();
+import {
+  scheduleTasks
+} from "./taskScheduler.js";
 
-// ================= HASH TASK =================
-function compactOutput(data = {}) {
-  return {
-    ...data,
+import {
+  validateTask
+} from "./runtime/taskHelpers.js";
 
-    files: (data.files || []).map(file => ({
-      path: file.path,
-      size: file.content
-        ? Buffer.byteLength(file.content, "utf8")
-        : 0
-    }))
-  };
-}
+import { executeRuntimeTask } from "./runtime/taskExecutor.js";
 
-function hashTask(task, context) {
-  return crypto
-    .createHash("md5")
-    .update(JSON.stringify({
+import {
+  runtimeReflectionLoop
+} from "./runtimeReflectionLoop.js";
+
+// ============================================================
+// RUNTIME CONSTANTS
+// ============================================================
+
+const MAX_REPAIRS = 2;
+
+
+
+
+
+
+// ============================================================
+// EXECUTION ENGINE
+// ============================================================
+
+export async function executeTasks(
+  tasks = [],
+  runtimeContext = {}
+) {
+
+  // ----------------------------------------------------------
+  // Normalize input
+  // ----------------------------------------------------------
+
+  tasks = Array.isArray(tasks)
+    ? [...tasks]
+    : [];
+
+  // ----------------------------------------------------------
+  // Available agents
+  // ----------------------------------------------------------
+
+  const availableAgents =
+    new Set(listAgents());
+
+  // ----------------------------------------------------------
+  // Validate initial tasks
+  // ----------------------------------------------------------
+
+  const invalidTasks = tasks
+    .map(task => ({
       task,
-      workspaceId: context.workspaceId
+      validation:
+        validateTask(
+          task,
+          availableAgents
+        )
     }))
-    .digest("hex");
-}
-// ================= PRE EXECUTION DECISION =================
-function shouldSkipExecution(task) {
+    .filter(item => !item.validation.ok);
 
-  if (task.type === "synthesis") {
-    return false;
+  if (invalidTasks.length) {
+
+    console.error(
+      "[RUNTIME INVALID TASKS]",
+      invalidTasks.map(item => ({
+        id: item.task?.id,
+        agent: item.task?.agent,
+        reason: item.validation.reason
+      }))
+    );
+
+    return {
+      ok: false,
+      error: "invalid_tasks",
+      invalidTasks:
+        invalidTasks.map(item => ({
+          id: item.task?.id,
+          agent: item.task?.agent,
+          reason: item.validation.reason
+        }))
+    };
   }
 
-  const input = task?.input || "";
+  // ----------------------------------------------------------
+  // Ensure critic exists for build workflows
+  // ----------------------------------------------------------
 
-  if (!input) return true;
+  const hasCritic =
+    tasks.some(
+      task => task.agent === "critic"
+    );
+
+  const finalTask =
+    tasks.find(
+      task => task.type === "synthesis"
+    );
+
+  const hasBuildAgents =
+    tasks.some(task =>
+      task.type === "agent" &&
+      [
+        "planner",
+        "frontend",
+        "backend",
+        "architect",
+        "repair"
+      ].includes(task.agent)
+    );
 
   if (
-    task.type === "reasoning" &&
-    String(input).length < 5
+    !hasCritic &&
+    finalTask &&
+    hasBuildAgents
   ) {
-    return true;
+
+    const buildDependencies =
+      [...(finalTask.dependsOn || [])];
+
+tasks.push({
+  id: "critic_1",
+  type: "agent",
+  agent: "critic",
+  input: "Review generated workspace",
+  dependsOn: buildDependencies,
+  priority: 2,
+  cost: 3,
+  estimatedTime: 5
+});
+
+    // IMPORTANT:
+    // The first critic is a quality gate,
+    // therefore final must wait for it.
+finalTask.dependsOn = [
+  ...new Set([
+    ...(finalTask.dependsOn || []),
+    "critic_1"
+  ])
+];
   }
 
-  return false;
-}
+  // ----------------------------------------------------------
+  // Validate again after critic injection
+  // ----------------------------------------------------------
 
-// ================= EXECUTION ENGINE =================
-export async function executeTasks(tasks = [], runtimeContext = {}) {
+  const invalidAfterInjection =
+    tasks
+      .map(task => ({
+        task,
+        validation:
+          validateTask(
+            task,
+            availableAgents
+          )
+      }))
+      .filter(item => !item.validation.ok);
 
-// ================= AUTO INSERT CRITIC =================
-const hasCritic = tasks.some(
-  t => t.agent === "critic"
-);
+  if (invalidAfterInjection.length) {
 
-const hasFinal = tasks.some(
-  t => t.type === "synthesis"
-);
+    return {
+      ok: false,
+      error: "invalid_tasks_after_injection",
+      invalidTasks:
+        invalidAfterInjection.map(item => ({
+          id: item.task?.id,
+          agent: item.task?.agent,
+          reason: item.validation.reason
+        }))
+    };
+  }
 
-// هل توجد مهام توليد مشروع؟
-const hasBuildAgents = tasks.some(t =>
-  t.type === "agent" &&
-  [
-    "planner",
-    "frontend",
-    "backend",
-    "architect",
-    "repair"
-  ].includes(t.agent)
-);
+  // ----------------------------------------------------------
+  // Create graph
+  // ----------------------------------------------------------
 
-if (!hasCritic && hasFinal && hasBuildAgents) {
+  let graph;
 
-  const finalTask = tasks.find(
-    t => t.type === "synthesis"
-  );
+  try {
 
-  const deps = finalTask?.dependsOn || [];
+    graph =
+      createTaskGraph(tasks);
 
-  tasks.push({
-    id: "critic_1",
-    type: "agent",
-    agent: "critic",
-    input: "Review generated workspace",
-    dependsOn: deps
-  });
+  } catch (error) {
 
-  finalTask.dependsOn = ["critic_1"];
-}
+    console.error(
+      "[RUNTIME GRAPH ERROR]",
+      error
+    );
 
-  const graph = createTaskGraph(tasks);
-  const runtimeId = crypto.randomUUID();
+    return {
+      ok: false,
+      error:
+        error?.message ||
+        "graph_creation_failed"
+    };
+  }
+
+  // ----------------------------------------------------------
+  // Runtime state
+  // ----------------------------------------------------------
+
+  const runtimeId =
+    crypto.randomUUID();
 
   await createRuntimeState({
     runtimeId,
-    workspaceId: runtimeContext.workspaceId,
+    workspaceId:
+      runtimeContext.workspaceId,
     graph,
     status: "running"
   });
 
+  // ----------------------------------------------------------
+  // Results
+  // ----------------------------------------------------------
+
   const results = [];
 
-  while (!isGraphDone(graph)) {
+    // Keep one final result entry per task.
+    // Retry attempts are tracked on graph.nodes[task.id].retries.
+    const recordResult = entry => {
+      const index = results.findIndex(
+        result => result.taskId === entry.taskId
+      );
 
-    const readyTasks = scheduleTasks(
-      getReadyTasks(graph),
-      graph,
-      runtimeContext
-    );
-    if (!readyTasks.length) break;
+      if (index >= 0) {
+        results[index] = entry;
+      } else {
+        results.push(entry);
+      }
+    };
 
-    await Promise.all(
-      readyTasks.map(async (task) => {
+  // ----------------------------------------------------------
+  // Repair state
+  // ----------------------------------------------------------
 
-        try {
+  let repairAttempts = 0;
 
-          // ================= CACHE CHECK =================
-          const cacheKey = hashTask(task, runtimeContext);
+  // Latest critic result
+  let latestCritic = null;
 
-          if (executionCache.has(cacheKey)) {
-            const cached = executionCache.get(cacheKey);
+  // ----------------------------------------------------------
+  // Helper: add planner tasks
+  // ----------------------------------------------------------
 
-            completeTask(graph, task.id, cached);
+  function injectPlannerTasks(plan) {
 
-            results.push({
-              taskId: task.id,
-              status: "cached",
-              output: cached
-            });
+    if (
+      !plan?.tasks ||
+      !Array.isArray(plan.tasks)
+    ) {
+      return [];
+    }
 
-            return;
+    const added = [];
+
+    for (const task of plan.tasks) {
+
+      if (!task?.id) {
+        continue;
+      }
+
+      if (task.type === "agent") {
+
+        if (!task.agent) {
+          continue;
+        }
+
+        if (
+          !availableAgents.has(
+            task.agent
+          )
+        ) {
+          console.warn(
+            "[PLANNER INVALID AGENT]",
+            task.agent,
+            task.id
+          );
+
+          continue;
+        }
+      }
+
+      try {
+
+        const addedTask =
+          addTask(graph, task);
+
+        if (addedTask) {
+          added.push(task);
+        }
+
+      } catch (error) {
+
+        console.error(
+          "[PLANNER ADD TASK ERROR]",
+          {
+            id: task.id,
+            error:
+              error?.message
           }
+        );
+      }
+    }
 
-          // ================= PRE CHECK =================
-          if (shouldSkipExecution(task)) {
-            const skipOutput = {
-              ok: true,
-              skipped: true,
-              result: "skipped_task"
-            };
-
-            completeTask(graph, task.id, skipOutput);
-
-            return;
-          }
-
-          graph.nodes[task.id].status = "running";
-
-          let output;
-
-          // ================= TOOL EXECUTION =================
-          if (task.type === "tool") {
-
-            const tool = getTool(task.tool);
-            if (!tool) throw new Error(`Tool not found: ${task.tool}`);
-
-            output = await tool.execute(task.input);
-          }
-
-          // ================= AGENT EXECUTION =================
-          else if (task.type === "agent") {
-
-if (!task.agent) {
-  throw new Error("Task has no assigned agent");
-}
-
-const selected = getAgent(task.agent);
-
-if (!selected) {
-    throw new Error(`Agent '${task.agent}' not found`);
-}
-
-            const dependencyResults =
-              (task.dependsOn || []).map(depId => ({
-                id: depId,
-                result: graph.nodes[depId]?.result
-              }));
-
-            // ================= LLM GATE =================
-function shouldForceLLM(task, context) {
-
-  const input = task?.input || "";
-  const lower = String(input).toLowerCase();
-
-  // critical reasoning tasks
-  if (task.type === "synthesis") return true;
-
-if (
-    lower.includes("fix") ||
-    lower.includes("repair") ||
-    lower.includes("bug") ||
-    lower.includes("error")
-) {
-    return true;
-}
-
-  if ((task.dependsOn || []).length > 1) return true;
-
-  return false;
-}
-
-let useLLM = shouldUseLLM(selected.name, {
-  task,
-  input: task.input
-});
-
-if (shouldForceLLM(task, runtimeContext)) {
-  useLLM = true;
-}
-
-            let res;
-
-            if (!useLLM) {
-
-              // deterministic execution path (NO LLM)
-              const agent = (await import("./agentRegistry.js"))
-                .getAgent(selected.name);
-
-              res = await agent.execute({
-input: {
-  original: runtimeContext.originalPrompt || task.input,
-
-  instruction: task.input,
-
-  dependencies: dependencyResults,
-
-  previousResults: results,
-
-  graph: graph
-},
-context: {
-  role: task.role,
-  task,
-
-  planner: runtimeContext.planner,
-
-  workspaceId: runtimeContext.workspaceId,
-
-  workspace: runtimeContext.workspace,
-
-  runtimeGraph: graph,
-
-  previousResults: results,
-
-  traceId: runtimeContext.traceId,
-
-  intent: runtimeContext.intent,
-  state: runtimeContext.state,
-  mode: runtimeContext.mode,
-
-  systemPrompt: runtimeContext.systemPrompt,
-
-  originalPrompt: runtimeContext.originalPrompt
-}
-              });
-
-if (selected.name === "planner") {
-
-  const plan = res;
-
-  if (plan?.tasks && Array.isArray(plan.tasks)) {
-
-for (const t of plan.tasks) {
-
-  addTask(graph, t);
-
-}
-
-console.log(
-  "[GRAPH AFTER PLANNER]",
-  JSON.stringify(graph, null, 2)
-);
-
+    return added;
   }
-}
 
-            } else {
+  // ==========================================================
+  // Main execution cycle
+  // ==========================================================
 
-              // LLM execution path
-              res = await runAgent({
-                agent: selected.name,
-input: {
-  original: runtimeContext.originalPrompt || task.input,
+  async function executeGraphUntilStable() {
 
-  instruction: task.input,
+    let safetyCounter = 0;
 
-  dependencies: dependencyResults,
+    const MAX_GRAPH_CYCLES = 1000;
 
-  previousResults: results,
+    while (!isGraphDone(graph)) {
 
-  graph: graph
-},
-context: {
-  role: task.role,
-  task,
+      safetyCounter++;
 
-  planner: runtimeContext.planner,
+      if (
+        safetyCounter >
+        MAX_GRAPH_CYCLES
+      ) {
 
-  workspaceId: runtimeContext.workspaceId,
+        console.error(
+          "[RUNTIME SAFETY STOP] Maximum graph cycles reached."
+        );
 
-  workspace: runtimeContext.workspace,
+        break;
+      }
 
-  runtimeGraph: graph,
+      // ------------------------------------------------------
+      // Fail blocked tasks
+      // ------------------------------------------------------
 
-  previousResults: results,
+      failBlockedTasks(graph);
 
-  traceId: runtimeContext.traceId,
+      // ------------------------------------------------------
+      // Get ready tasks
+      // ------------------------------------------------------
 
-  intent: runtimeContext.intent,
-  state: runtimeContext.state,
-  mode: runtimeContext.mode,
+      const ready =
+        getReadyTasks(graph);
 
-  systemPrompt: runtimeContext.systemPrompt,
+      // Tasks waiting for retry backoff are not executable yet.
+      const now =
+        Date.now();
 
-  originalPrompt: runtimeContext.originalPrompt
-}
-              });
+      const executableReady =
+        ready.filter(
+          task =>
+            !task.retryAt ||
+            task.retryAt <= now
+        );
+
+      const readyTasks =
+        scheduleTasks(
+          executableReady,
+          graph,
+          runtimeContext
+        );
+
+      // ------------------------------------------------------
+      // Retry backoff
+      // ------------------------------------------------------
+
+      if (!readyTasks.length) {
+
+        const retryWaiting =
+          ready
+            .filter(
+              task =>
+                task.retryAt &&
+                task.retryAt > now
+            );
+
+        if (retryWaiting.length) {
+
+          const nextRetryAt =
+            Math.min(
+              ...retryWaiting.map(
+                task => task.retryAt
+              )
+            );
+
+          const waitMs =
+            Math.max(
+              0,
+              nextRetryAt - Date.now()
+            );
+
+          console.log(
+            "[RUNTIME RETRY BACKOFF]",
+            {
+              waitMs,
+              tasks:
+                retryWaiting.map(
+                  task => ({
+                    id: task.id,
+                    retryAt: task.retryAt,
+                    retries: task.retries
+                  })
+                )
             }
+          );
 
-console.log(
-  `[RAW ${selected.name.toUpperCase()} RESULT]`,
-  JSON.stringify(compactOutput(res), null, 2)
-);
+          await new Promise(
+            resolve =>
+              setTimeout(
+                resolve,
+                waitMs
+              )
+          );
 
-            output = normalizeOutput(res);
+          continue;
+        }
 
-console.log(
-  `[NORMALIZED ${selected.name.toUpperCase()} RESULT]`,
-  JSON.stringify(compactOutput(output), null, 2)
-);
+        // ----------------------------------------------------
+        // Deadlock protection
+        // ----------------------------------------------------
 
-            // ================= CACHE STORE =================
-if (output?.ok) {
-executionCache.set(cacheKey, output);
+        const unfinished =
+          Object.values(graph.nodes)
+            .filter(
+              node =>
+                node.status === "pending" ||
+                node.status === "running"
+            );
 
-if (executionCache.size > 500) {
-    executionCache.delete(
-        executionCache.keys().next().value
-    );
-}
-}
-            // ================= FILE OUTPUT =================
-            const files =
-              output?.files ||
-              output?.result?.files ||
-              [];
+        if (unfinished.length) {
 
-            if (runtimeContext.workspaceId && files.length) {
-              for (const file of files) {
-                await writeWorkspaceFile({
-                  workspaceId: runtimeContext.workspaceId,
-                  file: file.path,
-                  content: file.content
+          console.error(
+            "[RUNTIME DEADLOCK]",
+            unfinished.map(node => ({
+              id: node.id,
+              type: node.type,
+              agent: node.agent,
+              status: node.status,
+              dependsOn:
+                node.dependsOn
+            }))
+          );
+        }
+
+        break;
+      }
+
+      // ------------------------------------------------------
+      // Execute ready tasks
+      // ------------------------------------------------------
+
+      await Promise.all(
+        readyTasks.map(
+          async task => {
+
+            try {
+
+              // ------------------------------------------------
+              // Execute task
+              // ------------------------------------------------
+
+              graph.nodes[task.id].status = "running";
+
+              const output =
+                await executeRuntimeTask({
+                  task,
+                  graph,
+                  runtimeContext,
+                  results,
+                  injectPlannerTasks
+                });
+
+              // =================================================
+              // OUTPUT FAILURE
+              // =================================================
+
+              if (
+                output?.ok === false
+              ) {
+
+                const optional =
+                  task.optional === true;
+
+                if (optional) {
+
+                  graph.nodes[
+                    task.id
+                  ].status = "failed";
+
+                  graph.nodes[
+                    task.id
+                  ].result = {
+                    ok: false,
+                    optional: true,
+                    error:
+                      output.error ||
+                      "optional_agent_failed"
+                  };
+
+                  graph.nodes[
+                    task.id
+                  ].error =
+                    output.error ||
+                    "optional_agent_failed";
+
+                  console.warn(
+                    "[OPTIONAL TASK FAILED]",
+                    task.id,
+                    output.error
+                  );
+
+                  recordResult({
+                    taskId:
+                      task.id,
+
+                    status:
+                      "failed",
+
+                    optional: true,
+
+                    error:
+                      output.error,
+
+                    output
+                  });
+
+                  return;
+                }
+
+                failTask(
+                  graph,
+                  task.id,
+                  output.error ||
+                    "agent_failed"
+                );
+
+                recordResult({
+                  taskId:
+                    task.id,
+
+                  status:
+                    "failed",
+
+                  error:
+                    output.error,
+
+                  output
+                });
+
+                return;
+              }
+
+              // =================================================
+              // COMPLETE
+              // =================================================
+
+              completeTask(
+                graph,
+                task.id,
+                output
+              );
+
+              recordResult({
+                taskId:
+                  task.id,
+
+                status:
+                  "done",
+
+                output
+              });
+
+              // ------------------------------------------------
+              // Capture critic
+              // ------------------------------------------------
+
+              if (
+                task.agent ===
+                "critic"
+              ) {
+
+                latestCritic =
+                  output;
+              }
+
+              await updateRuntimeState(
+                runtimeId,
+                {
+                  graph
+                }
+              );
+
+            } catch (error) {
+
+              const errorMessage =
+                error?.message ||
+                "task_failed";
+
+              const optional =
+                task.optional === true;
+
+              if (optional) {
+
+                graph.nodes[
+                  task.id
+                ].status = "failed";
+
+                graph.nodes[
+                  task.id
+                ].result = {
+                  ok: false,
+                  optional: true,
+                  error:
+                    errorMessage
+                };
+
+                graph.nodes[
+                  task.id
+                ].error =
+                  errorMessage;
+
+                console.warn(
+                  "[OPTIONAL TASK ERROR]",
+                  task.id,
+                  errorMessage
+                );
+
+                recordResult({
+                  taskId:
+                    task.id,
+
+                  status:
+                    "failed",
+
+                  optional: true,
+
+                  error:
+                    errorMessage
+                });
+
+              } else {
+
+                failTask(
+                  graph,
+                  task.id,
+                  errorMessage
+                );
+
+                recordResult({
+                  taskId:
+                    task.id,
+
+                  status:
+                    "failed",
+
+                  error:
+                    errorMessage
                 });
               }
+
+              await updateRuntimeState(
+                runtimeId,
+                {
+                  graph
+                }
+              );
+            }
+          }
+        )
+      );
+
+      await updateRuntimeState(
+        runtimeId,
+        {
+          graph
+        }
+      );
+    }
+
+    return graph;
+  }
+
+  // ==========================================================
+  // INITIAL EXECUTION
+  // ==========================================================
+
+  await executeGraphUntilStable();
+
+  // ==========================================================
+  // REFLECTION / REPAIR LOOP
+  // ==========================================================
+
+  while (
+    repairAttempts < MAX_REPAIRS
+  ) {
+
+    const criticNode =
+      Object.values(graph.nodes)
+        .filter(
+          node =>
+            node.agent === "critic" &&
+            node.result
+        )
+        .sort(
+          (a, b) =>
+            (b.completedAt || 0) -
+            (a.completedAt || 0)
+        )[0];
+
+    if (!criticNode) {
+      break;
+    }
+
+    latestCritic =
+      criticNode.result;
+
+    const criticData =
+      latestCritic?.data ||
+      latestCritic;
+
+    const issues =
+      criticData?.issues ||
+      latestCritic?.issues ||
+      [];
+
+    if (
+      !Array.isArray(issues) ||
+      issues.length === 0
+    ) {
+
+      console.log(
+        "[RUNTIME] Critic found no issues."
+      );
+
+      break;
+    }
+
+    // --------------------------------------------------------
+    // Increment repair attempt
+    // --------------------------------------------------------
+
+    repairAttempts++;
+
+    console.log(
+      `[RUNTIME REPAIR] Attempt ${repairAttempts}/${MAX_REPAIRS}`
+    );
+
+    // --------------------------------------------------------
+    // Reflection loop
+    // --------------------------------------------------------
+
+    const reflection =
+      await runtimeReflectionLoop({
+
+        graph,
+
+        criticResult:
+          latestCritic,
+
+        rerunTask:
+          async taskId => {
+
+            const node =
+              graph.nodes[taskId];
+
+            if (!node) {
+              return false;
             }
 
+            node.status =
+              "pending";
+
+            node.result =
+              null;
+
+            node.error =
+              null;
+
+            return true;
+          },
+
+        updatePlan:
+          async patch => {
+
+            const planner =
+              getAgent("planner");
+
+            if (!planner) {
+              return;
+            }
+
+            try {
+
+              const repairedPlan =
+                await planner.execute({
+
+                  input: {
+
+                    original:
+                      runtimeContext.originalPrompt,
+
+                    instruction:
+                      "Repair execution graph",
+
+                    critic:
+                      {
+                        issues,
+
+                        criticalCount:
+                          issues.filter(
+                            issue =>
+                              issue.severity ===
+                              "critical"
+                          ).length,
+
+                        patch
+                      },
+
+                    graph
+                  },
+
+                  context:
+                    runtimeContext
+                });
+
+              const added =
+                injectPlannerTasks(
+                  repairedPlan
+                );
+
+              console.log(
+                "[RUNTIME REPAIR PLAN]",
+                {
+                  addedTasks:
+                    added.length
+                }
+              );
+
+            } catch (error) {
+
+              console.error(
+                "[RUNTIME REPAIR PLANNER ERROR]",
+                error
+              );
+            }
+          }
+      });
+
+    await updateRuntimeState(
+      runtimeId,
+      {
+        graph,
+        reflection
+      }
+    );
+
+    // --------------------------------------------------------
+    // No repair tasks were created
+    // --------------------------------------------------------
+
+    const pendingRepairTasks =
+      Object.values(graph.nodes)
+        .filter(node =>
+          node.status === "pending" &&
+          (
+            node.agent === "repair" ||
+            node.agent === "frontend" ||
+            node.agent === "backend" ||
+            node.agent === "architect"
+          )
+        );
+
+    if (!pendingRepairTasks.length) {
+
+      console.warn(
+        "[RUNTIME REPAIR] No repair tasks generated."
+      );
+
+      break;
+    }
+
+    // --------------------------------------------------------
+    // Execute newly injected repair graph
+    // --------------------------------------------------------
+
+    await executeGraphUntilStable();
+
+    // --------------------------------------------------------
+    // Check if graph still has work
+    // --------------------------------------------------------
+
+    if (!isGraphDone(graph)) {
+      continue;
+    }
+
+    // --------------------------------------------------------
+    // Continue only if another critic exists
+    // --------------------------------------------------------
+
+const verificationCriticId =
+  reflection?.verificationCriticId;
+
+const newCritic =
+  verificationCriticId
+    ? graph.nodes[
+        verificationCriticId
+      ]
+    : null;
+
+if (!newCritic) {
+  console.warn(
+    "[RUNTIME REPAIR] Verification critic not found."
+  );
+  break;
+}
+
 if (
-  runtimeContext.workspaceId &&
-  (
-    output.pages ||
-    output.routes ||
-    output.entities ||
-    output.architecture
-  )
+  newCritic.status !== "done" ||
+  !newCritic.result
 ) {
-  await publishKnowledge(
-    runtimeContext.workspaceId,
-    selected.name,
+  console.warn(
+    "[RUNTIME REPAIR] Verification critic did not complete.",
     {
-      pages: output.pages || [],
-      routes: output.routes || [],
-      entities: output.entities || [],
-      architecture: output.architecture || {}
+      id:
+        verificationCriticId,
+      status:
+        newCritic.status
     }
   );
-}
-          }
 
-          // ================= SYNTHESIS =================
-else if (task.type === "synthesis") {
-
-  const nodes = Object.values(graph.nodes)
-    .filter(n => n.id !== task.id);
-
-  const files = nodes
-    .flatMap(n => n.result?.files || []);
-
-  const data = {
-    merged: nodes.map(n => ({
-      task: n.id,
-      status: n.status,
-      output: n.result
-    })),
-
-    summary: {
-      totalTasks: nodes.length,
-      success: nodes.filter(n => n.status === "done").length,
-      failed: nodes.filter(n => n.status === "failed").length
-    }
-  };
-
-  output = {
-    ok: true,
-    data: {
-      files,
-      data
-    },
-    files: []
-  };
+  break;
 }
 
+latestCritic =
+  newCritic.result;
 
-          else {
-            output = { ok: false, result: "unknown task type" };
-          }
+const newCriticData =
+  latestCritic?.data ||
+  latestCritic;
 
-if (output?.ok === false) {
+const remainingIssues =
+  newCriticData?.issues ||
+  latestCritic?.issues ||
+  [];
 
-  failTask(
-    graph,
-    task.id,
-    output.error || "agent_failed"
+if (
+  !Array.isArray(remainingIssues) ||
+  remainingIssues.length === 0
+) {
+  console.log(
+    "[RUNTIME] Repair verification passed."
   );
 
-console.log("[TASK FAILED]", task.id, output.error);
-
-  await updateRuntimeState(runtimeId, { graph });
-
-  results.push({
-    taskId: task.id,
-    status: "failed",
-    error: output.error,
-    output
-  });
-
-  return;
+  break;
 }
+  }
 
-completeTask(graph, task.id, output);
+  // ==========================================================
+  // FINAL SYNTHESIS SAFETY
+  // ==========================================================
 
-await updateRuntimeState(runtimeId, { graph });
+  let finalNode =
+    Object.values(graph.nodes)
+      .find(
+        node =>
+          node.type === "synthesis"
+      );
 
-results.push({
-  taskId: task.id,
-  status: "done",
-  output
-});
+  // If planner/repair removed or failed to create final task,
+  // create one safely.
+  if (!finalNode) {
 
-        } catch (err) {
+    const finalId =
+      "final_output";
 
-          failTask(graph, task.id, err.message || "task_failed");
+    try {
 
-          await updateRuntimeState(runtimeId, { graph });
-
-          results.push({
-            taskId: task.id,
-            status: "failed",
-            error: err.message
-          });
+      addTask(
+        graph,
+        {
+          id: finalId,
+          type: "synthesis",
+          input:
+            "Synthesize final workspace output",
+          dependsOn:
+            Object.values(graph.nodes)
+              .filter(
+                node =>
+                  node.id !== finalId &&
+                  node.status === "done"
+              )
+              .map(
+                node =>
+                  node.id
+              )
         }
+      );
 
-      })
+      finalNode =
+        graph.nodes[finalId];
+
+    } catch (error) {
+
+      console.error(
+        "[RUNTIME FINAL TASK ERROR]",
+        error
+      );
+    }
+  }
+
+  // ----------------------------------------------------------
+  // Make final wait for latest successful critic
+  // ----------------------------------------------------------
+
+  const latestCriticNode =
+    Object.values(graph.nodes)
+      .filter(
+        node =>
+          node.agent === "critic" &&
+          node.status === "done"
+      )
+      .sort(
+        (a, b) =>
+          (b.completedAt || 0) -
+          (a.completedAt || 0)
+      )[0];
+
+  if (
+    finalNode &&
+    latestCriticNode &&
+    finalNode.status === "pending"
+  ) {
+
+    const dependencies =
+      new Set(
+        finalNode.dependsOn || []
+      );
+
+    dependencies.add(
+      latestCriticNode.id
+    );
+
+    updateTask(
+      graph,
+      finalNode.id,
+      {
+        dependsOn:
+          [...dependencies]
+      }
     );
   }
 
-  await updateRuntimeState(runtimeId, {
-    status: "completed",
-    graph
-  });
+  // ----------------------------------------------------------
+  // Execute final synthesis
+  // ----------------------------------------------------------
 
-// ================= CRITIC REPAIR PATCH =================
-let repairAttempts = 0;
-const MAX_REPAIRS = 2;
+  if (
+    finalNode &&
+    finalNode.status === "pending"
+  ) {
 
-const critic = results.find(r => {
-  const node = graph.nodes[r.taskId];
-  return node?.agent === "critic";
-});
+    await executeGraphUntilStable();
+  }
 
-if (
-  critic?.output &&
-  repairAttempts < MAX_REPAIRS
-) {
+  // ==========================================================
+  // FINAL STATE
+  // ==========================================================
 
-  repairAttempts++;
+  const graphNodes =
+    Object.values(
+      graph.nodes
+    );
 
-await runtimeReflectionLoop({
-    graph,
-    criticResult: critic.output,
+  const failedTasks =
+    graphNodes.filter(
+      node =>
+        node.status === "failed"
+    );
 
-    rerunTask: async () => true,
+  const pendingTasks =
+    graphNodes.filter(
+      node =>
+        node.status === "pending" ||
+        node.status === "running"
+    );
 
-    updatePlan: async (patch) => {
+  const unfinishedTasks =
+    pendingTasks.length;
 
-        const planner = getAgent("planner");
+  const hasFatalFailure =
+    failedTasks.some(node => !node.optional);
 
-        if (!planner) return;
+  const criticData =
+    latestCritic?.data ||
+    latestCritic;
 
-        const repairedPlan =
-            await planner.execute({
+  const criticPassed =
+    !latestCritic ||
+    criticData?.verdict === "approved";
 
-                input: {
-                    original: runtimeContext.originalPrompt,
-                    instruction:
-                        "Repair execution graph",
-                    critic: critic.output.data,
-                    graph
-                },
+  const graphCompleted =
+    isGraphDone(graph) &&
+    unfinishedTasks === 0 &&
+    !hasFatalFailure &&
+    criticPassed;
 
-                context: runtimeContext
+  // ==========================================================
+  // FINAL FILE MAP
+  // ==========================================================
 
-            });
+  const finalFileMap =
+    new Map();
 
-        if (repairedPlan?.tasks) {
+  for (
+    const node of graphNodes
+  ) {
 
-            for (const task of repairedPlan.tasks) {
-                addTask(graph, task);
-            }
-if (!repairedPlan.tasks.length) {
-    return;
-}
+    const nodeFiles =
+      node.result?.files ||
+      node.result?.data?.files ||
+      [];
 
-        }
-
+    if (!Array.isArray(nodeFiles)) {
+      continue;
     }
 
-});
+    for (
+      const file of nodeFiles
+    ) {
 
-}
+      if (!file?.path) {
+        continue;
+      }
 
-if (!isGraphDone(graph)) {
-  console.warn("[RUNTIME] Graph stopped with unfinished tasks.");
-}
-
-const finalFiles = Object.values(graph.nodes)
-  .flatMap(n => n.result?.files || []);
-
-return {
-  ok: true,
-  runtimeId,
-  graph,
-  results,
-  files: finalFiles,
-  critic: critic?.output?.data,
-  summary: {
-    totalTasks: Object.keys(graph.nodes).length,
-    success: Object.values(graph.nodes)
-      .filter(n => n.status === "done").length,
-    failed: Object.values(graph.nodes)
-      .filter(n => n.status === "failed").length
+      finalFileMap.set(
+        file.path,
+        file
+      );
+    }
   }
-};
+
+  const finalFiles =
+    [...finalFileMap.values()];
+
+  // ==========================================================
+  // FINAL RUNTIME STATE
+  // ==========================================================
+
+  await updateRuntimeState(
+    runtimeId,
+    {
+      status:
+        graphCompleted
+          ? "completed"
+          : "incomplete",
+
+      graph,
+
+      repairAttempts
+    }
+  );
+
+  // ==========================================================
+  // RETURN
+  // ==========================================================
+
+  return {
+
+    ok:
+      graphCompleted,
+
+    runtimeId,
+
+    graph,
+
+    results,
+
+    files:
+      finalFiles,
+
+    critic:
+      latestCritic?.data ||
+      latestCritic ||
+      null,
+
+    repairAttempts,
+
+    summary: {
+
+      totalTasks:
+        graphNodes.length,
+
+      success:
+        graphNodes.filter(
+          node =>
+            node.status === "done"
+        ).length,
+
+      failed:
+        graphNodes.filter(
+          node =>
+            node.status === "failed"
+        ).length,
+
+      pending:
+        graphNodes.filter(
+          node =>
+            node.status === "pending"
+        ).length,
+
+      running:
+        graphNodes.filter(
+          node =>
+            node.status === "running"
+        ).length,
+
+      completed:
+        graphCompleted
+    }
+  };
 }

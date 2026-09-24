@@ -5,70 +5,209 @@ import {
   recordAgentTask
 } from "./agentMemory.js";
 
-import { writeWorkspaceFile }
-  from "./workspaceFs.js";
+import Workspace from "../models/Workspace.js";
+
+import {
+  writeWorkspaceFile,
+  listWorkspaceFiles
+} from "./workspaceFs.js";
 
 import { normalizeAgentOutput }
   from "./utils/agentOutputNormalizer.js";
 
-import { readKnowledge } from "./sharedWorkspaceBus.js";
-import { listWorkspaceFiles } from "./workspaceFs.js";
+import { readKnowledge }
+  from "./sharedWorkspaceBus.js";
 
-// ================= ROUTER =================
+// ============================================================
+// WORKSPACE AGENT STATUS
+// ============================================================
+
+async function updateWorkspaceAgentStatus(
+  workspaceId,
+  agent,
+  status
+) {
+  if (!workspaceId || !agent) {
+    return;
+  }
+
+  try {
+
+    const workspace =
+      await Workspace.findById(workspaceId);
+
+    if (!workspace) {
+      console.warn(
+        "[WORKSPACE] Workspace not found:",
+        workspaceId
+      );
+      return;
+    }
+
+    const agentEntry =
+      workspace.agents?.find(
+        item => item.name === agent
+      );
+
+    if (!agentEntry) {
+      console.warn(
+        "[WORKSPACE] Agent not registered:",
+        agent
+      );
+      return;
+    }
+
+    agentEntry.status = status;
+
+    const hasRunningAgents =
+      workspace.agents.some(
+        item => item.status === "running"
+      );
+
+    if (hasRunningAgents) {
+
+      workspace.runtimeState = "executing";
+
+    } else if (status === "failed") {
+
+      workspace.runtimeState = "failed";
+
+    } else {
+
+      workspace.runtimeState = "idle";
+
+    }
+
+    workspace.lastSessionAt =
+      new Date();
+
+    await workspace.save();
+
+    console.log(
+      "[WORKSPACE AGENT STATUS]",
+      agent,
+      status
+    );
+
+  } catch (error) {
+
+    console.error(
+      "[WORKSPACE STATUS UPDATE ERROR]",
+      error.message
+    );
+
+  }
+}
+
+// ============================================================
+// COMPACT OUTPUT
+// ============================================================
+
 function compactOutput(data = {}) {
+
   return {
+
     ...data,
 
     files: (data.files || []).map(file => ({
       path: file.path,
       size: file.content
-        ? Buffer.byteLength(file.content, "utf8")
+        ? Buffer.byteLength(
+            file.content,
+            "utf8"
+          )
         : 0
     }))
+
   };
+
 }
+
+// ============================================================
+// ROUTER
+// ============================================================
 
 export async function runAgent({
+
   agent,
+
   input,
+
   context = {}
+
 }) {
 
-  const target = getAgent(agent);
-
-  console.log("[ROUTER]", agent, !!target);
-
-if (!target?.execute) {
-  throw new Error(`Agent '${agent}' has no execute() implementation`);
-}
+  const target =
+    getAgent(agent);
 
   if (!target) {
-    throw new Error(`Agent not found: ${agent}`);
+
+    throw new Error(
+      `Agent not found: ${agent}`
+    );
+
   }
 
-  const memory = await getAgentMemory(agent);
+  if (
+    typeof target.execute !==
+    "function"
+  ) {
 
-let workspaceKnowledge =
-  context.workspace?.knowledge || [];
+    throw new Error(
+      `Agent '${agent}' has no execute() implementation`
+    );
 
-let workspaceFiles =
-  context.workspace?.files || [];
+  }
 
-if (
-  context.workspaceId &&
-  workspaceKnowledge.length === 0
-) {
-  workspaceKnowledge =
-    await readKnowledge(context.workspaceId);
-}
+  console.log(
+    "[ROUTER]",
+    agent,
+    true
+  );
 
-if (
-  context.workspaceId &&
-  workspaceFiles.length === 0
-) {
-  workspaceFiles =
-    await listWorkspaceFiles(context.workspaceId);
-}
+  // ==========================================================
+  // AGENT STARTED
+  // ==========================================================
+
+  await updateWorkspaceAgentStatus(
+    context.workspaceId,
+    agent,
+    "running"
+  );
+
+  const memory =
+    await getAgentMemory(agent);
+
+  let workspaceKnowledge =
+    context.workspace?.knowledge || [];
+
+  let workspaceFiles =
+    context.workspace?.files || [];
+
+  if (
+    context.workspaceId &&
+    workspaceKnowledge.length === 0
+  ) {
+
+    workspaceKnowledge =
+      await readKnowledge(
+        context.workspaceId,
+        context.workspace?.snapshot?.version || 1
+      );
+
+  }
+
+  if (
+    context.workspaceId &&
+    workspaceFiles.length === 0
+  ) {
+
+    workspaceFiles =
+      await listWorkspaceFiles(
+        context.workspaceId
+      );
+
+  }
 
   const specialization =
     memory.specialization || {};
@@ -77,88 +216,133 @@ if (
     memory.successes -
     memory.failures * 0.5;
 
-const enrichedContext = {
+  const enrichedContext = {
 
-  ...context,
+    ...context,
 
-workspace: {
+    workspace: {
 
-  ...(context.workspace || {}),
+      ...(context.workspace || {}),
 
-  files: workspaceFiles,
+      files:
+        workspaceFiles,
 
-  knowledge: workspaceKnowledge
+      knowledge:
+        workspaceKnowledge
 
-},
+    },
 
-  agentMeta: {
+    agentMeta: {
 
-    name: agent,
+      name: agent,
 
-    score,
+      score,
 
-    runs: memory.runs,
+      runs: memory.runs,
 
-    specialization
+      specialization
 
-  },
+    },
 
-  agentMemory: memory
+    agentMemory:
+      memory
 
-};
+  };
 
-  const startedAt = Date.now();
+  const startedAt =
+    Date.now();
 
   try {
 
-    const rawResult = await target.execute({
-      input,
-      context: enrichedContext
-    });
+    const rawResult =
+      await target.execute({
 
-console.log(
-  "[RAW AGENT EXECUTE]",
-  JSON.stringify(compactOutput(rawResult), null, 2)
-);
+        input,
+
+        context:
+          enrichedContext
+
+      });
+
+    console.log(
+      "[RAW AGENT EXECUTE]",
+      JSON.stringify(
+        compactOutput(rawResult),
+        null,
+        2
+      )
+    );
 
     const result =
-      normalizeAgentOutput(rawResult);
+      normalizeAgentOutput(
+        rawResult
+      );
 
-console.log(
-  "[NORMALIZED AGENT]",
-  JSON.stringify(compactOutput(result), null, 2)
-);
+    console.log(
+      "[NORMALIZED AGENT]",
+      JSON.stringify(
+        compactOutput(result),
+        null,
+        2
+      )
+    );
 
-const hasContent =
-  !!result.text ||
-  Object.keys(result.data || {}).length > 0 ||
-  (result.files?.length || 0) > 0 ||
-  (result.tasks?.length || 0) > 0 ||
-  (result.routes?.length || 0) > 0 ||
-  (result.pages?.length || 0) > 0 ||
-  (result.entities?.length || 0) > 0 ||
-  (result.architecture &&
-   Object.keys(result.architecture).length > 0);
+    const hasContent =
 
-if (!hasContent) {
-  throw new Error("Agent returned empty output");
-}
+      !!result.text ||
 
-if (context.workspaceId && context.traceId) {
+      Object.keys(
+        result.data || {}
+      ).length > 0 ||
 
-  await writeWorkspaceFile({
+      (result.files?.length || 0) > 0 ||
 
-    workspaceId: context.workspaceId,
+      (result.tasks?.length || 0) > 0 ||
 
-    file:
-      `logs/${context.traceId}_${agent}_${Date.now()}.json`,
+      (result.routes?.length || 0) > 0 ||
 
-    content:
-      JSON.stringify(result, null, 2)
+      (result.pages?.length || 0) > 0 ||
 
-  });
+      (result.entities?.length || 0) > 0 ||
 
-}
+      (
+        result.architecture &&
+        Object.keys(
+          result.architecture
+        ).length > 0
+      );
+
+    if (!hasContent) {
+
+      throw new Error(
+        "Agent returned empty output"
+      );
+
+    }
+
+    if (
+      context.workspaceId &&
+      context.traceId
+    ) {
+
+      await writeWorkspaceFile({
+
+        workspaceId:
+          context.workspaceId,
+
+        file:
+          `logs/${context.traceId}_${agent}_${Date.now()}.json`,
+
+        content:
+          JSON.stringify(
+            result,
+            null,
+            2
+          )
+
+      });
+
+    }
 
     await recordAgentTask({
 
@@ -170,6 +354,16 @@ if (context.workspaceId && context.traceId) {
 
     });
 
+    // ========================================================
+    // AGENT COMPLETED
+    // ========================================================
+
+    await updateWorkspaceAgentStatus(
+      context.workspaceId,
+      agent,
+      "completed"
+    );
+
     return {
 
       ...result,
@@ -177,7 +371,8 @@ if (context.workspaceId && context.traceId) {
       agent,
 
       duration:
-        Date.now() - startedAt
+        Date.now() -
+        startedAt
 
     };
 
@@ -195,30 +390,57 @@ if (context.workspaceId && context.traceId) {
 
     });
 
-const memory = await getAgentMemory(agent);
+    const memory =
+      await getAgentMemory(agent);
 
-memory.lastDuration = Date.now() - startedAt;
-memory.lastSuccess = Date.now();
+    memory.lastDuration =
+      Date.now() -
+      startedAt;
 
-if (context.workspaceId && context.traceId) {
+    memory.lastSuccess =
+      Date.now();
 
-  await writeWorkspaceFile({
+    if (
+      context.workspaceId &&
+      context.traceId
+    ) {
 
-    workspaceId: context.workspaceId,
+      await writeWorkspaceFile({
 
-    file:
-      `logs/${context.traceId}_${agent}_error_${Date.now()}.json`,
+        workspaceId:
+          context.workspaceId,
 
-    content: JSON.stringify({
+        file:
+          `logs/${context.traceId}_${agent}_error_${Date.now()}.json`,
+
+        content:
+          JSON.stringify({
+
+            agent,
+
+            input,
+
+            error:
+              err.message,
+
+            stack:
+              err.stack
+
+          }, null, 2)
+
+      });
+
+    }
+
+    // ========================================================
+    // AGENT FAILED
+    // ========================================================
+
+    await updateWorkspaceAgentStatus(
+      context.workspaceId,
       agent,
-      input,
-      error: err.message,
-      stack: err.stack
-    }, null, 2)
-
-  });
-
-}
+      "failed"
+    );
 
     return {
 
@@ -227,9 +449,11 @@ if (context.workspaceId && context.traceId) {
       agent,
 
       duration:
-        Date.now() - startedAt,
+        Date.now() -
+        startedAt,
 
-      error: err.message
+      error:
+        err.message
 
     };
 

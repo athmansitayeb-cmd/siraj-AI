@@ -8,57 +8,94 @@ import { useParams } from "react-router-dom";
 
 export default function Chat({ isGuest = false }) {
 
- // ================= IDs =================
+// ================= IDs =================
+
 const { workspaceId } = useParams();
 
-useEffect(() => {
- if (!workspaceId) {
- console.error("Missing workspaceId");
- window.location.href = "/intent";
- }
-}, [workspaceId]);
-
 const [workspace, setWorkspace] = useState(null);
+const [conversationId, setConversationId] = useState(null);
 
 useEffect(() => {
- const loadWorkspace = async () => {
- try {
- const res = await fetch(
- `/api/workspace/${workspaceId}`,
- {
- headers: {
- Authorization:
- "Bearer " + localStorage.getItem("siraj_token")
- }
- }
- );
+  if (!workspaceId) {
+    console.error("Missing workspaceId");
+    window.location.href = "/intent";
+    return;
+  }
 
- const data = await res.json();
+  const loadWorkspace = async () => {
+    try {
+      const res = await fetch(
+        `/api/workspace/${workspaceId}`,
+        {
+          headers: {
+            Authorization:
+              "Bearer " +
+              localStorage.getItem("siraj_token")
+          }
+        }
+      );
 
- setWorkspace(data);
+      if (!res.ok) {
+        console.error(
+          "Workspace unavailable:",
+          workspaceId,
+          res.status
+        );
 
- } catch (err) {
- console.error("Workspace load error:", err);
- }
- };
+        localStorage.removeItem("workspace_id");
 
- if (workspaceId) {
- loadWorkspace();
- }
+        setWorkspace(null);
+        setConversationId(null);
+
+        window.location.href = "/intent";
+
+        return;
+      }
+
+      const data = await res.json();
+
+      if (!data?._id || !data?.conversationId) {
+        console.error(
+          "Invalid workspace data:",
+          data
+        );
+
+        window.location.href = "/intent";
+
+        return;
+      }
+
+      setWorkspace(data);
+
+      /*
+       * IMPORTANT:
+       * Workspace is the source of truth for conversationId.
+       */
+      setConversationId(
+        data.conversationId
+      );
+
+      localStorage.setItem(
+        "workspace_id",
+        data._id
+      );
+
+      localStorage.setItem(
+        `conversation:${data._id}`,
+        data.conversationId
+      );
+
+    } catch (err) {
+      console.error(
+        "Workspace load error:",
+        err
+      );
+    }
+  };
+
+  loadWorkspace();
 
 }, [workspaceId]);
-
-const [conversationId] = useState(() => {
- const key = `conversation:${workspaceId}`;
- const existing = localStorage.getItem(key);
-
- if (existing) return existing;
-
- const id = crypto.randomUUID();
- localStorage.setItem(key, id);
-
- return id;
-});
 
  // ================= AUTH =================
  const token = isGuest ? null : localStorage.getItem("siraj_token");
@@ -163,13 +200,15 @@ if (!conversationId) {
  ...prev,
  {
  role: "assistant",
- content:
- data?.msg === "too_short"
- ? "⚠️ Message too short."
- : data?.msg === "message_too_long"
- ? "⚠️ Message too long."
- : "⚠️ System error.",
- },
+content:
+  data?.msg === "too_short"
+    ? "⚠️ Message too short."
+    : data?.msg === "message_too_long"
+    ? "⚠️ Message too long."
+    : data?.msg === "workspace_not_found"
+    ? "⚠️ Workspace no longer exists. Returning to workspace selection."
+    : "⚠️ System error.",
+},
  ]);
  };
 

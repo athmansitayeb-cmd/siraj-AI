@@ -188,6 +188,13 @@ io.on("connection", (socket) => {
   console.log("USER DEBUG:", socket.user);
 
   socket.on("message", async ({ conversationId, workspaceId, msg }) => {
+   console.log("[CHAT REQUEST]", {
+     userId: socket.user.id,
+     workspaceId,
+     conversationId,
+     msg
+   });
+
    if (socket.processing) return;
     socket.processing = true;
 
@@ -198,9 +205,25 @@ if (!workspaceId) {
   return;
 }
 
-      const workspace =
-       await Workspace.findById(workspaceId);
+const workspace =
+  await Workspace.findOne({
+    _id: workspaceId,
+    userId: socket.user.id,
+    state: "active"
+  });
 
+if (!workspace) {
+  console.warn("[WORKSPACE INVALID]", {
+    workspaceId,
+    userId: socket.user.id
+  });
+
+  socket.emit("message-error", {
+    msg: "workspace_not_found"
+  });
+
+  return;
+}
       // ================= LIMIT ENGINE =================
       const limiter = buildLimitEngine({
         redis,
@@ -280,7 +303,14 @@ const orchestrateResult = await orchestrate({
 });
 
       if (!orchestrateResult.ok) {
-       console.log("BLOCK DEBUG:", orchestrateResult);
+
+console.log("[BLOCK]", {
+  ok: orchestrateResult?.ok,
+  reason: orchestrateResult?.output?.reason,
+  files: orchestrateResult?.output?.files?.length || 0,
+  critic: !!orchestrateResult?.output?.critic
+});
+
         socket.emit("message-error", {
           msg: "AI_BLOCKED",
           reason: orchestrateResult.reason

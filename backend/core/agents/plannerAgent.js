@@ -1,701 +1,995 @@
-import { registerAgent } from "../agentRegistry.js";
+import {
+  registerAgent,
+  listAgents
+} from "../agentRegistry.js";
+
 import { groq } from "../groqClient.js";
 import { updateWorkspaceMemory } from "../workspaceMemory.js";
 import { publishKnowledge } from "../sharedWorkspaceBus.js";
 
+const ALLOWED_TYPES = new Set([
+  "agent",
+  "tool",
+  "synthesis"
+]);
+
+function normalizeText(value) {
+  return String(value ?? "").trim();
+}
+
+function normalizeTask(task) {
+  if (!task || typeof task !== "object") {
+    return null;
+  }
+
+  const id = normalizeText(task.id);
+  const agent = normalizeText(task.agent);
+  const type = normalizeText(task.type || "agent");
+
+  if (!id || !agent) {
+    return null;
+  }
+
+  if (!ALLOWED_TYPES.has(type)) {
+    return null;
+  }
+
+  return {
+    ...task,
+
+    id,
+
+    type,
+
+    agent,
+
+    input: normalizeText(task.input),
+
+    priority:
+      Number.isFinite(Number(task.priority))
+        ? Number(task.priority)
+        : 5,
+
+    cost:
+      Number.isFinite(Number(task.cost))
+        ? Number(task.cost)
+        : 1,
+
+    estimatedTime:
+      Number.isFinite(Number(task.estimatedTime))
+        ? Number(task.estimatedTime)
+        : 1,
+
+    dependsOn:
+      Array.isArray(task.dependsOn)
+        ? task.dependsOn
+            .map(normalizeText)
+            .filter(Boolean)
+        : []
+  };
+}
+
+function deduplicateTasks(tasks, existingTaskIds) {
+
+  const seenIds = new Set(existingTaskIds);
+
+  const seenWork = new Set();
+
+  const result = [];
+
+  for (const rawTask of tasks || []) {
+
+    const task = normalizeTask(rawTask);
+
+    if (!task) {
+      continue;
+    }
+
+    /*
+     * Existing graph tasks must never be recreated.
+     */
+    if (seenIds.has(task.id)) {
+      continue;
+    }
+
+    /*
+     * Never allow duplicate work with different IDs.
+     */
+    const workKey =
+      `${task.type}:${task.agent}:${task.input}`
+        .toLowerCase()
+        .trim();
+
+    if (seenWork.has(workKey)) {
+      continue;
+    }
+
+    seenIds.add(task.id);
+    seenWork.add(workKey);
+
+    result.push(task);
+  }
+
+  return result;
+}
+
+function sanitizeDependencies(tasks, existingTaskIds) {
+
+  const validIds = new Set([
+    ...existingTaskIds,
+    ...tasks.map(task => task.id)
+  ]);
+
+  for (const task of tasks) {
+
+    task.dependsOn = [
+      ...new Set(
+        task.dependsOn.filter(dep =>
+          validIds.has(dep) &&
+          dep !== task.id
+        )
+      )
+    ];
+  }
+
+  return tasks;
+}
+
+function ensureFinalTask(tasks, repairMode = false) {
+
+  /*
+   * Repair mode must NEVER create a new final task.
+   * The runtime already owns final_output.
+   */
+  if (repairMode) {
+    return tasks.filter(
+      task =>
+        task.type !== "synthesis" &&
+        task.id !== "final_output"
+    );
+  }
+
+  /*
+   * Remove any LLM-generated final tasks.
+   * We create exactly one deterministic final task.
+   */
+  const filtered = tasks.filter(
+    task =>
+      task.type !== "synthesis" &&
+      task.id !== "final_output"
+  );
+
+  const criticTasks = filtered.filter(
+    task => task.agent === "critic"
+  );
+
+  /*
+   * Final depends on critic when critic exists.
+   * Otherwise it depends on the last generated tasks.
+   */
+  let dependencies;
+
+  if (criticTasks.length) {
+
+    dependencies = criticTasks.map(
+      task => task.id
+    );
+
+  } else {
+
+    const dependedOn = new Set(
+      filtered.flatMap(
+        task => task.dependsOn || []
+      )
+    );
+
+    dependencies = filtered
+      .filter(task => !dependedOn.has(task.id))
+      .map(task => task.id);
+  }
+
+  filtered.push({
+    id: "final_output",
+    type: "synthesis",
+    agent: "synthesis",
+    input: "Synthesize final workspace output",
+    priority: 1,
+    cost: 1,
+    estimatedTime: 1,
+    dependsOn: dependencies
+  });
+
+  return filtered;
+}
+
 registerAgent("planner", {
 
-  description: "Core planning brain (LLM + structured task generator)",
+  description:
+    "Core planning brain (LLM + structured task generator)",
 
   async execute({ input, context }) {
 
-const originalPrompt = String(
-  input?.original || ""
-);
+    const originalPrompt =
+      normalizeText(input?.original);
 
-const instruction = String(
-  input?.instruction || ""
-);
+    const instruction =
+      normalizeText(input?.instruction);
 
-const critic = input?.critic || null;
+    const critic =
+      input?.critic || null;
 
-const currentGraph = input?.graph || null;
+    const currentGraph =
+      input?.graph || null;
 
-const existingTaskIds = new Set(
-  Object.keys(currentGraph?.nodes || {})
-);
+    const workspaceId =
+      context?.workspaceId;
 
-const repairMode =
-  instruction === "Repair execution graph";
+    const workspaceVersion =
+      context?.workspace?.snapshot?.version || 1;
 
-const msg = originalPrompt || instruction;
+    const existingTaskIds =
+      new Set(
+        Object.keys(
+          currentGraph?.nodes || {}
+        )
+      );
 
-    const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
-      temperature: 0.2,
-      messages: [
-        {
-          role: "system",
-          content: `
+    const repairMode =
+      instruction === "Repair execution graph";
+
+    const availableAgents =
+      listAgents();
+
+    const availableAgentSet =
+      new Set(availableAgents);
+
+    const userRequest =
+      originalPrompt || instruction;
+
+    /*
+     * Initial planning and repair planning are deliberately
+     * separated. This prevents the LLM from rebuilding the
+     * entire project during repair.
+     */
+    const systemPrompt = `
 You are the MASTER PLANNER of SIRAJ.
 
-Your job is NOT to answer the user.
+Your responsibility is to generate an execution graph.
 
-Your ONLY responsibility is to transform the user's request into an optimal execution graph for the runtime engine.
+AVAILABLE AGENTS:
+${availableAgents.join("\n")}
 
-The planner has TWO modes.
+Only use agents from this exact list.
 
-MODE 1
-Initial planning.
+Never invent an agent.
 
-Create the execution graph from the user's request.
+==================================================
+MODE
+==================================================
 
-MODE 2
-Repair planning.
+${repairMode
+  ? `
+REPAIR MODE
 
-If critic data and the current graph are provided:
+The project has already been executed.
 
-- Analyze the current graph.
-- Keep completed tasks.
-- Never recreate successful tasks.
-- Create ONLY the additional repair tasks required.
-- Return ONLY the new tasks that should be appended.
+The critic found problems.
 
-Return ONLY valid JSON.
+Analyze:
+- the original user request
+- the critic issues
+- the current graph
 
-Never use markdown.
+Return ONLY NEW repair tasks.
 
-Never explain anything.
+Rules:
 
-Never return natural language.
+1. Never recreate completed tasks.
+2. Never recreate successful work.
+3. Never create final_output.
+4. Never create synthesis tasks.
+5. Never create another critic task.
+6. Create only tasks necessary to fix the reported issues.
+7. Use the correct agent for each issue.
+8. Keep repair tasks independent whenever possible.
+9. Do not modify unrelated functionality.
+`
+  : `
+INITIAL PLANNING MODE
 
---------------------------------------------------
-OUTPUT FORMAT
---------------------------------------------------
+Transform the complete user request into an execution graph.
+
+Create only tasks actually required.
+
+The planner itself is already running.
+Do not generate any task whose agent is "planner".
+
+Use parallel tasks whenever dependencies allow it.
+
+Always include a critic task when software/code is generated.
+
+Do not create final_output.
+The runtime will add it deterministically.
+==================================================
+STRICT JSON OUTPUT
+==================================================
+
+Return exactly ONE JSON object.
+
+The response MUST start with "{"
+and MUST end with "}".
+
+NEVER return multiple JSON objects.
+
+NEVER return raw task objects.
+
+NEVER return a JSON array as the top-level response.
+
+ALL tasks MUST be inside the "tasks" array.
+
+Correct structure:
 
 {
-  "intent": "",
-  "complexity": "low|medium|high",
-  "estimatedTasks": 0,
+  "intent": "software",
+  "complexity": "medium",
   "architecture": {},
   "routes": [],
-  "pages": [
-    {
-      "name": "",
-      "route": ""
-    }
-  ],
+  "pages": [],
   "entities": [],
-  "tasks":[]
+  "tasks": [
+    {
+      "id": "task_1",
+      "type": "agent",
+      "agent": "architect",
+      "input": "Design the architecture",
+      "priority": 5,
+      "cost": 2,
+      "estimatedTime": 2,
+      "dependsOn": []
+    }
+  ]
 }
 
---------------------------------------------------
-YOUR GOALS
---------------------------------------------------
-
-Your goal is to minimize execution time while maximizing quality.
-
-Think like a software architect.
-
-Break large problems into smaller independent tasks.
-
-Parallelize whenever possible.
-
-Never create unnecessary tasks.
-
---------------------------------------------------
-AVAILABLE AGENTS
---------------------------------------------------
-
-planner
-
-research
-
-architect
-
-frontend
-
-backend
-
-database
-
-api
-
-auth
-
-ui
-
-testing
-
-security
-
-optimizer
-
-documentation
-
-deployment
-
-critic
-
-repair
-
-If an agent does not exist yet, still include it if it logically belongs to the execution graph.
-
---------------------------------------------------
-TASK FORMAT
---------------------------------------------------
-
-Each task MUST be
-
-{
-"id":"task_name",
-"type":"agent",
-"agent":"backend",
-"input":"clear instruction",
-
-"priority":5,
-"cost":1,
-"estimatedTime":1,
-
-"dependsOn":[]
-}
-
---------------------------------------------------
-TASK PRIORITY
---------------------------------------------------
-
-priority
-
-10 = planner
-
-9 = architect
-
-8 = database
-
-8 = backend
-
-8 = frontend
-
-7 = api
-
-7 = auth
-
-6 = testing
-
-5 = security
-
-4 = documentation
-
-3 = deployment
-
-2 = critic
-
-1 = synthesis
-
---------------------------------------------------
-TASK COST
---------------------------------------------------
-
-Estimate relative execution cost.
-
-1 = tiny
-
-3 = small
-
-5 = medium
-
-8 = large
-
-13 = huge
-
---------------------------------------------------
-ESTIMATED TIME
---------------------------------------------------
-
-Estimate execution duration in seconds.
-
-
-Allowed types
-
-agent
-
-tool
-
-synthesis
-
---------------------------------------------------
-TASK IDS
---------------------------------------------------
-
-IDs must be unique.
-
-Examples
-
-research_1
-
-backend_api
-
-backend_models
-
-frontend_dashboard
-
-frontend_login
-
-database_schema
-
-testing_api
-
-critic_review
-
-repair_backend
-
-final_output
-
---------------------------------------------------
-DEPENDENCIES
---------------------------------------------------
-
-Use dependsOn to create a DAG.
-
-Never create cycles.
-
-Independent tasks should execute in parallel.
-
-Example
-
-research
-
-↓
-
-architecture
-
-↓
-
-database
-backend
-frontend
-
-↓
-
-testing
-
-↓
-
-critic
-
-↓
-
-repair
-
-↓
-
-final
-
---------------------------------------------------
-WHEN TO CREATE TASKS
---------------------------------------------------
-
-Small question
-
-↓
-
-assistant only
-
-Simple generation
-
-↓
-
-research
-
-↓
-
-critic
-
-↓
-
-final
-
-Medium software
-
-↓
-
-research
-
-↓
-
-architecture
-
-↓
-
-frontend
-
-↓
-
-backend
-
-↓
-
-critic
-
-↓
-
-final
-
-Large software
-
-↓
-
-research
-
-↓
-
-architecture
-
-↓
-
-database
-
-↓
-
-backend
-
-↓
-
-frontend
-
-↓
-
-authentication
-
-↓
-
-api
-
-↓
-
-testing
-
-↓
-
-security
-
-↓
-
-optimization
-
-↓
-
-documentation
-
-↓
-
-deployment
-
-↓
-
-critic
-
-↓
-
-repair
-
-↓
-
-final
-
---------------------------------------------------
-ARCHITECTURE
---------------------------------------------------
-
-Infer automatically
-
-frontend
-
-backend
-
-database
-
-authentication
-
-api
-
-mobile
-
-desktop
-
-ai
-
-agents
-
---------------------------------------------------
-ROUTES
---------------------------------------------------
-
-Extract all API routes.
-
---------------------------------------------------
-PAGES
---------------------------------------------------
-
-Return page objects.
-
-Example
-
-"pages":[
-  {
-    "name":"Login",
-    "route":"/api/auth"
-  },
-  {
-    "name":"Dashboard",
-    "route":"/api/dashboard"
-  },
-  {
-    "name":"Analytics",
-    "route":"/api/analytics"
-  }
-]
-
---------------------------------------------------
-ENTITIES
---------------------------------------------------
-
-Extract business entities.
-
---------------------------------------------------
-QUALITY RULES
---------------------------------------------------
-
-Never duplicate work.
-
-Never merge unrelated tasks.
-
-Split large backend work into multiple tasks.
-
-Split frontend into pages when needed.
-
-Create testing tasks whenever code is generated.
-
-Always perform critic review before final synthesis.
-
-If the project is large,
-
-insert repair tasks after critic.
-
---------------------------------------------------
-SYNTHESIS
---------------------------------------------------
-
-Always finish with
-
-{
-"id":"final_output",
-"type":"synthesis",
-"dependsOn":[
-"...last tasks..."
-]
-}
-
---------------------------------------------------
-JSON ONLY
---------------------------------------------------
-
-Return ONLY valid JSON.
-
+Return JSON only.
 No markdown.
+No explanation.
+`}
 
-No comments.
+==================================================
+TASK FORMAT
+==================================================
 
-No explanations.
-
-No prose.
-          `
-        },
 {
-  role: "user",
-  content: repairMode
-    ? JSON.stringify({
-        originalRequest: originalPrompt,
-        critic,
-        graph: currentGraph
-      }, null, 2)
-    : msg
-}
-      ]
-    });
-console.log("===== GROQ COMPLETION =====");
-console.dir(completion, { depth: null });
-
-let text = completion?.choices?.[0]?.message?.content || "{}";
-
-console.log("===== RAW TEXT =====");
-console.log(text);
-
-// تنظيف أي Markdown يضيفه الـ LLM
-let clean = text.trim();
-
-clean = clean.replace(/^```json\s*/i, "");
-clean = clean.replace(/^```\s*/i, "");
-clean = clean.replace(/```$/i, "").trim();
-
-// استخراج أول JSON صالح
-const start = clean.indexOf("{");
-const end = clean.lastIndexOf("}");
-
-if (start !== -1 && end !== -1) {
-  clean = clean.slice(start, end + 1);
+  "id": "unique_task_id",
+  "type": "agent",
+  "agent": "registered_agent",
+  "input": "clear executable instruction",
+  "priority": 5,
+  "cost": 1,
+  "estimatedTime": 1,
+  "dependsOn": []
 }
 
-console.log("===== CLEAN JSON =====");
-console.log(clean);
+==================================================
+QUALITY RULES
+==================================================
 
-try {
+- Never duplicate work.
+- Never invent agents.
+- Never create cycles.
+- Keep tasks focused.
+- Backend changes belong to backend or repair.
+- Frontend changes belong to frontend or repair.
+- Architecture decisions belong to architect.
+- Project analysis belongs to research.
+- General planning belongs to planner.
+- Never create a task assigned to planner during initial planning.
+- The planner is already executing the master planning phase.
+- Never create planner -> planner recursive tasks.
+- Code defects can use repair.
+- Critic is for review only.
+- Synthesis is controlled by the runtime.
+`;
 
-const plan = JSON.parse(clean);
+    const userPayload =
+      repairMode
+        ? {
+            mode: "repair",
+            originalRequest: originalPrompt,
+            critic,
+            currentGraph
+          }
+        : {
+            mode: "initial",
+            originalRequest: userRequest
+          };
 
-plan.tasks ??= [];
-plan.routes ??= [];
-plan.pages ??= [];
-plan.entities ??= [];
-plan.architecture ??= {};
+    let completion;
 
-if (Array.isArray(plan.tasks)) {
+    try {
 
-plan.tasks = plan.tasks.filter(task => {
+      completion =
+        await groq.chat.completions.create({
 
-  if (!task?.id || !task?.agent) {
-    return false;
-  }
+          model:
+            process.env.GROQ_MODEL || "openai/gpt-oss-120b",
 
-  if (existingTaskIds.has(task.id)) {
-    return false;
-  }
+          temperature: 0.15,
 
-  return true;
+          messages: [
+            {
+              role: "system",
+              content: systemPrompt
+            },
+            {
+              role: "user",
+              content:
+                JSON.stringify(
+                  userPayload,
+                  null,
+                  2
+                )
+            }
+          ]
+        });
 
-});
+    } catch (error) {
 
-const seen = new Set();
+      console.error(
+        "[PLANNER GROQ ERROR]",
+        error
+      );
 
-plan.tasks = plan.tasks.filter(task => {
+      return {
+        ok: false,
+        error:
+          error?.message ||
+          "planner_llm_failed",
+        tasks: []
+      };
+    }
 
-  const key = `${task.agent}:${task.input}`;
+    let text =
+      completion
+        ?.choices?.[0]
+        ?.message?.content || "{}";
 
-  if (seen.has(key)) {
-    return false;
-  }
+    // ==================================================
+    // ROBUST PLANNER JSON PARSER
+    // ==================================================
 
-  seen.add(key);
+    let clean =
+      String(text).trim();
 
-  return true;
+    /*
+     * Remove markdown fences.
+     */
+    clean = clean
+      .replace(/^```json\s*/i, "")
+      .replace(/^```\s*/i, "")
+      .replace(/```\s*$/i, "")
+      .trim();
 
-});
+    function extractJSONValues(source) {
 
-}
+      const values = [];
 
-for (const task of plan.tasks || []) {
+      let start = -1;
+      let depth = 0;
+      let inString = false;
+      let escaped = false;
 
-  task.dependsOn ??= [];
+      for (
+        let i = 0;
+        i < source.length;
+        i++
+      ) {
 
-}
+        const char = source[i];
 
-const validIds = new Set(
-  (plan.tasks || []).map(t => t.id)
-);
+        if (inString) {
 
-for (const task of plan.tasks) {
+          if (escaped) {
+            escaped = false;
+            continue;
+          }
 
-  task.dependsOn = task.dependsOn.filter(
-    dep =>
-      existingTaskIds.has(dep) ||
-      validIds.has(dep)
-  );
+          if (char === "\\") {
+            escaped = true;
+            continue;
+          }
 
-}
+          if (char === '"') {
+            inString = false;
+          }
 
-for (const task of plan.tasks || []) {
+          continue;
+        }
 
-  task.type ??= "agent";
+        if (char === '"') {
+          inString = true;
+          continue;
+        }
 
-}
+        if (
+          char === "{" ||
+          char === "["
+        ) {
 
-for (const task of plan.tasks || []) {
+          if (depth === 0) {
+            start = i;
+          }
 
-  task.priority ??= 5;
-  task.cost ??= 1;
-  task.estimatedTime ??= 1;
+          depth++;
 
-}
+          continue;
+        }
 
-if (context?.workspaceId) {
+        if (
+          char === "}" ||
+          char === "]"
+        ) {
 
-  await updateWorkspaceMemory(context.workspaceId, {
+          depth--;
 
-    architecture: plan.architecture || {},
+          if (
+            depth === 0 &&
+            start !== -1
+          ) {
 
-    routes: plan.routes || [],
+            const candidate =
+              source.slice(
+                start,
+                i + 1
+              );
 
-    pages: plan.pages || [],
+            try {
 
-    entities: plan.entities || [],
+              values.push(
+                JSON.parse(candidate)
+              );
 
-    originalRequest: msg,
+            } catch {
+              // Ignore invalid fragment
+            }
 
-    intent: plan.intent || "",
+            start = -1;
+          }
+        }
+      }
 
-    complexity: plan.complexity || "medium"
+      return values;
+    }
 
-  });
+    let plan;
 
-  await publishKnowledge(
-    context.workspaceId,
-    "planner",
-    plan
-  );
-}
+    try {
 
-if (!plan.tasks.some(t => t.type === "synthesis")) {
+      /*
+       * First attempt:
+       * normal JSON object.
+       */
+      try {
 
-  plan.tasks.push({
-    id: "final_output",
-    type: "synthesis",
-    dependsOn: plan.tasks
-      .filter(t => t.agent === "critic")
-      .map(t => t.id)
-  });
+        plan =
+          JSON.parse(clean);
 
-}
+      } catch {
 
-return {
-  ok: true,
-  intent: plan.intent,
-  complexity: plan.complexity,
-  architecture: plan.architecture,
-  routes: plan.routes || [],
-  pages: plan.pages || [],
-  entities: plan.entities || [],
-  tasks: Array.isArray(plan.tasks)
-    ? plan.tasks
-    : []
-};
-} catch (e) {
+        /*
+         * Second attempt:
+         * extract balanced JSON values.
+         */
+        const values =
+          extractJSONValues(clean);
 
-  console.error(
-    "[PLANNER ERROR]",
-    e
-  );
+        /*
+         * Standard planner object.
+         */
+        if (
+          values.length === 1 &&
+          values[0] &&
+          typeof values[0] === "object" &&
+          !Array.isArray(values[0])
+        ) {
 
-  console.error(
-    "[PLANNER RAW]",
-    clean
-  );
+          const value = values[0];
 
-  return {
-    ok: false,
-    error: e.message,
-    raw: text
-  };
+          if (
+            Array.isArray(value.tasks)
+          ) {
 
-}
+            plan = value;
+
+          } else if (
+            value.id &&
+            value.agent
+          ) {
+
+            /*
+             * Single task returned
+             * instead of full plan.
+             */
+            plan = {
+              intent: "software",
+              complexity: "medium",
+              architecture: {},
+              routes: [],
+              pages: [],
+              entities: [],
+              tasks: [value]
+            };
+          }
+        }
+
+        /*
+         * LLM sometimes returns:
+         *
+         * {...},
+         * {...},
+         * {...}
+         *
+         * Convert those objects
+         * into plan.tasks.
+         */
+        if (
+          !plan &&
+          values.length > 0 &&
+          values.every(
+            value =>
+              value &&
+              typeof value === "object" &&
+              !Array.isArray(value) &&
+              value.id &&
+              value.agent
+          )
+        ) {
+
+          plan = {
+
+            intent: "software",
+
+            complexity: "medium",
+
+            architecture: {},
+
+            routes: [],
+
+            pages: [],
+
+            entities: [],
+
+            tasks: values
+          };
+        }
+
+        /*
+         * LLM may return:
+         *
+         * [
+         *   {...},
+         *   {...}
+         * ]
+         */
+        if (
+          !plan &&
+          values.length === 1 &&
+          Array.isArray(values[0])
+        ) {
+
+          const tasks =
+            values[0];
+
+          plan = {
+
+            intent: "software",
+
+            complexity: "medium",
+
+            architecture: {},
+
+            routes: [],
+
+            pages: [],
+
+            entities: [],
+
+            tasks
+          };
+        }
+      }
+
+      if (
+        !plan ||
+        typeof plan !== "object"
+      ) {
+
+        throw new Error(
+          "Planner returned no valid JSON plan"
+        );
+      }
+
+      if (
+        !Array.isArray(plan.tasks)
+      ) {
+
+        plan.tasks = [];
+      }
+
+      console.log(
+        "[PLANNER JSON PARSED]",
+        {
+          tasks:
+            plan.tasks.length
+        }
+      );
+
+    } catch (error) {
+
+      console.error(
+        "[PLANNER JSON ERROR]",
+        error
+      );
+
+      console.error(
+        "[PLANNER RAW]",
+        clean
+      );
+
+      return {
+
+        ok: false,
+
+        error:
+          "invalid_planner_json",
+
+        tasks: [],
+
+        files: []
+      };
+    }
+
+    /*
+     * Normalize metadata.
+     */
+    plan.intent =
+      normalizeText(plan.intent);
+
+    plan.complexity =
+      ["low", "medium", "high"]
+        .includes(plan.complexity)
+        ? plan.complexity
+        : "medium";
+
+    plan.architecture =
+      plan.architecture &&
+      typeof plan.architecture === "object"
+        ? plan.architecture
+        : {};
+
+    plan.routes =
+      Array.isArray(plan.routes)
+        ? plan.routes
+        : [];
+
+    plan.pages =
+      Array.isArray(plan.pages)
+        ? plan.pages
+        : [];
+
+    plan.entities =
+      Array.isArray(plan.entities)
+        ? plan.entities
+        : [];
+
+    /*
+     * Validate and deduplicate tasks.
+     */
+    let tasks =
+      deduplicateTasks(
+        Array.isArray(plan.tasks)
+          ? plan.tasks
+          : [],
+        existingTaskIds
+      );
+
+    /*
+     * Only registered agents are allowed.
+     */
+
+tasks =
+  tasks.filter(task => {
+
+    if (
+      task.type === "synthesis"
+    ) {
+      return false;
+    }
+
+    if (
+      task.agent === "planner"
+    ) {
+      console.warn(
+        "[PLANNER RECURSION BLOCKED]",
+        task.id
+      );
+
+      return false;
+    }
+
+    if (
+      !availableAgentSet.has(
+        task.agent
+      )
+    ) {
+
+          console.warn(
+            "[PLANNER INVALID AGENT]",
+            task.agent,
+            task.id
+          );
+
+          return false;
+        }
+
+        return true;
+      });
+
+    /*
+     * Repair mode has strict rules.
+     */
+    if (repairMode) {
+
+      tasks =
+        tasks.filter(task => {
+
+          if (
+            task.id === "final_output"
+          ) {
+            return false;
+          }
+
+          if (
+            task.type === "synthesis"
+          ) {
+            return false;
+          }
+
+          if (
+            task.agent === "critic"
+          ) {
+            return false;
+          }
+
+          return true;
+        });
+    }
+
+    /*
+     * Clean dependencies.
+     */
+    tasks =
+      sanitizeDependencies(
+        tasks,
+        existingTaskIds
+      );
+
+    /*
+     * Initial planning gets exactly one
+     * deterministic final task.
+     */
+    if (!repairMode) {
+
+      tasks =
+        ensureFinalTask(
+          tasks,
+          false
+        );
+
+    } else {
+
+      tasks =
+        ensureFinalTask(
+          tasks,
+          true
+        );
+    }
+
+    /*
+     * Persist planning metadata.
+     */
+    if (workspaceId) {
+
+      await updateWorkspaceMemory(
+        workspaceId,
+        {
+          workspaceVersion,
+          architecture:
+            plan.architecture,
+
+          routes:
+            plan.routes,
+
+          pages:
+            plan.pages,
+
+          entities:
+            plan.entities,
+
+          originalRequest:
+            originalPrompt ||
+            context?.originalPrompt ||
+            instruction,
+
+          intent:
+            plan.intent,
+
+          complexity:
+            plan.complexity
+        }
+      );
+
+      /*
+       * Do not publish a repair plan as if it
+       * were the complete original plan.
+       */
+      await publishKnowledge(
+        workspaceId,
+        "planner",
+        {
+          ...plan,
+          tasks,
+          mode:
+            repairMode
+              ? "repair"
+              : "initial"
+        },
+        workspaceVersion
+      );
+    }
+
+    console.log(
+      "[PLANNER]",
+      {
+        mode:
+          repairMode
+            ? "repair"
+            : "initial",
+
+        tasks:
+          tasks.map(task => ({
+            id: task.id,
+            type: task.type,
+            agent: task.agent,
+            dependsOn:
+              task.dependsOn
+          }))
+      }
+    );
+
+    return {
+
+      ok: true,
+
+      intent:
+        plan.intent,
+
+      complexity:
+        plan.complexity,
+
+      architecture:
+        plan.architecture,
+
+      routes:
+        plan.routes,
+
+      pages:
+        plan.pages,
+
+      entities:
+        plan.entities,
+
+      tasks
+    };
   }
 });

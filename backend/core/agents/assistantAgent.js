@@ -83,7 +83,7 @@ if (cache.size > 500) {
     // ================= LLM CALL (ONLY WHEN NEEDED) =================
     const completion =
       await groq.chat.completions.create({
-        model: "llama-3.3-70b-versatile",
+        model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
         messages: [
            systemPrompt,
           {
@@ -109,7 +109,7 @@ if (cache.size > 500) {
       ok: true,
       text: content,
 data: {
-  model: "llama-3.3-70b-versatile",
+  model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
   finishReason:
     completion?.choices?.[0]?.finish_reason || "stop"
 }

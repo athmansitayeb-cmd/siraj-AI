@@ -61,6 +61,41 @@ if (plannerTask) {
   return [plannerTask];
 }
 
+// Verification critic must run only after repair tasks.
+// It is identified by its verification instruction.
+const verificationCritic = readyTasks.find(
+  t =>
+    t.agent === "critic" &&
+    String(t.input || "")
+      .toLowerCase()
+      .includes("verify whether the reported issues are completely resolved")
+);
+
+if (verificationCritic) {
+
+  const repairTasks =
+    Object.values(graph.nodes).filter(
+      node =>
+        node.id !== verificationCritic.id &&
+        (
+          node.agent === "repair" ||
+          node.agent === "frontend" ||
+          node.agent === "backend" ||
+          node.agent === "architect"
+        ) &&
+        (
+          node.status === "pending" ||
+          node.status === "running"
+        )
+    );
+
+  if (repairTasks.length) {
+    return [];
+  }
+
+  return [verificationCritic];
+}
+
   return [...readyTasks]
     .sort((a, b) => score(b, graph) - score(a, graph))
     .slice(0, maxParallel);

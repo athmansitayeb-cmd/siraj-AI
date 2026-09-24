@@ -34,14 +34,41 @@ Rules:
 `
 });
 
+function normalizePageName(pageInfo) {
+  const raw =
+    typeof pageInfo === "string"
+      ? pageInfo
+      : pageInfo?.name ||
+        pageInfo?.title ||
+        pageInfo?.path?.replace(/^\/+|\/+$/g, "");
+
+  const name = String(raw || "App")
+    .replace(/[^a-zA-Z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join("");
+
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)
+    ? name
+    : "App";
+}
+
 registerAgent("frontend", {
 
   description: "Frontend code generator",
 
   async execute({ input, context }) {
 
+    const workspaceVersion =
+      context?.workspace?.snapshot?.version || 1;
+
     const knowledge = context?.workspaceId
-      ? await readKnowledge(context.workspaceId)
+      ? await readKnowledge(
+          context.workspaceId,
+          workspaceVersion
+        )
       : [];
 
 const plannerKnowledge =
@@ -49,11 +76,20 @@ const plannerKnowledge =
     .reverse()
     .find(k => k.agent === "planner");
 
-const plan =
-  plannerKnowledge?.data ||
+const dependencyResults =
   input?.dependencies
-    ?.find(d => d.result?.architecture)
-    ?.result ||
+    ?.map(d => d?.result)
+    ?.filter(Boolean) || [];
+
+const plannerPlan = plannerKnowledge?.data;
+
+const plan =
+  (Array.isArray(plannerPlan?.pages) && plannerPlan.pages.length
+    ? plannerPlan
+    : null) ||
+  dependencyResults.find(d => Array.isArray(d.pages) && d.pages.length) ||
+  plannerPlan ||
+  dependencyResults.find(d => d.architecture) ||
   {};
 
 let pages = plan.pages || [];
@@ -74,10 +110,7 @@ if (!pages.length) {
 
    for (const pageInfo of pages) {
 
-     const page =
-       typeof pageInfo === "string"
-         ? pageInfo
-         : pageInfo.name;
+     const page = normalizePageName(pageInfo);
 
       const content = await agent.generate({
 
@@ -95,7 +128,9 @@ if (!pages.length) {
 
           routes: plan.routes || [],
 
-          architecture: plan.architecture || {}
+          architecture: plan.architecture || {},
+
+          context
 
         }
 

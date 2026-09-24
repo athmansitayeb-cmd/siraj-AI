@@ -128,12 +128,14 @@ if (context?.workspaceId) {
 
   workspaceKnowledge =
     await readKnowledge(
-      context.workspaceId
+      context.workspaceId,
+      workspace?.version || 1
     );
 
   workspaceMemory =
     await getWorkspaceMemory(
-      context.workspaceId
+      context.workspaceId,
+      workspace?.version || 1
     );
 
 }
@@ -154,10 +156,13 @@ const initialPlan = unifiedPlanner({
   cognition
 });
 
-console.log(
-  "[INITIAL PLAN]",
-  JSON.stringify(initialPlan, null, 2)
-);
+console.log("[INITIAL PLAN]", {
+  intent: initialPlan?.intent,
+  complexity: initialPlan?.complexity,
+  taskCount: Array.isArray(initialPlan?.tasks)
+    ? initialPlan.tasks.length
+    : 0
+});
 
 if (initialPlan.intent === "conversation") {
 
@@ -180,6 +185,7 @@ if (initialPlan.intent === "conversation") {
 }
 
 let tasks = initialPlan.tasks;
+let plannerOutput = {};
 
 // Execute planner whenever it is the first task
 if (
@@ -210,13 +216,18 @@ if (
 }
   );
 
-const plannerOutput =
+plannerOutput =
   planner.results?.[0]?.output || {};
 
-console.log(
-  "[PLANNER OUTPUT]",
-  JSON.stringify(plannerOutput, null, 2)
-);
+console.log("[PLANNER OUTPUT]", {
+  ok: plannerOutput?.ok,
+  intent: plannerOutput?.intent,
+  taskCount: Array.isArray(plannerOutput?.tasks)
+    ? plannerOutput.tasks.length
+    : Array.isArray(plannerOutput?.data?.tasks)
+      ? plannerOutput.data.tasks.length
+      : 0
+});
 
 const plannerTasks =
   plannerOutput.tasks ||
@@ -238,37 +249,97 @@ context.planner = plannerOutput;
 
 console.log(
   "[PLANNER TASKS]",
-  JSON.stringify(tasks, null, 2)
+  tasks.map(t => ({
+    id: t.id,
+    agent: t.agent,
+    type: t.type,
+    dependsOn: t.dependsOn
+  }))
 );
+
 }
+
+
+console.log("[ORCHESTRATOR] BEFORE EXECUTE TASKS", {
+  taskCount: tasks.length,
+  tasks: tasks.map(t => ({
+    id: t.id,
+    agent: t.agent,
+    type: t.type,
+    dependsOn: t.dependsOn
+  })),
+  workspaceId: context.workspaceId
+});
 
 const result = await executeTasks(
   tasks,
-{
-  workspaceId: context.workspaceId,
-  planner: plannerOutput,
-  workspace: {
-    snapshot: workspace,
-    files: workspaceFiles,
-    knowledge: workspaceKnowledge,
-    memory: workspaceMemory
-  },
+  {
+    workspaceId: context.workspaceId,
 
-  traceId: context.traceId,
+    planner: plannerOutput,
 
-  intent: cognition.intent,
-  state: cognition.state,
-  mode: cognition.mode,
+    workspace: {
+      snapshot: workspace,
+      files: workspaceFiles,
+      knowledge: workspaceKnowledge,
+      memory: workspaceMemory
+    },
 
-  systemPrompt: cognition.systemPrompt,
-  originalPrompt: msg
-}
+    traceId: context.traceId,
+
+    intent: cognition.intent,
+    state: cognition.state,
+    mode: cognition.mode,
+
+    systemPrompt: cognition.systemPrompt,
+    originalPrompt: msg
+  }
 );
+
+console.log("[ORCHESTRATOR] AFTER EXECUTE TASKS", {
+  ok: result?.ok,
+  error: result?.error,
+  resultCount: result?.results?.length
+});
 
 console.log(
   "[EXECUTE TASKS RESULT]",
   JSON.stringify(compactOutput(result), null, 2)
 );
+
+// لا نعتبر التنفيذ ناجحاً إذا كانت هناك مهام فاشلة
+// أو إذا توقف الـ runtime قبل إنهاء الـ graph.
+if (
+  !result ||
+  result.ok !== true ||
+  result.summary?.failed > 0 ||
+  (
+    Number.isFinite(result.summary?.totalTasks) &&
+    Number.isFinite(result.summary?.success) &&
+    result.summary.totalTasks > result.summary.success
+  )
+) {
+  console.error(
+    "[ORCHESTRATOR] Execution incomplete",
+    JSON.stringify(compactOutput(result), null, 2)
+  );
+
+  return finalize(
+    {
+      ok: false,
+      reason: "execution_incomplete",
+      files: result?.files || [],
+      graph: result?.graph,
+      summary: result?.summary,
+      critic: result?.critic || null,
+      runtimeId: result?.runtimeId
+    },
+    userMemory,
+    msg,
+    redis,
+    cacheKey
+  );
+}
 
 let finalOutput = {
   ok: result.ok,

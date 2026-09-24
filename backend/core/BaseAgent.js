@@ -19,7 +19,7 @@ export class BaseAgent {
 
     this.model =
       config.model ||
-      "llama-3.3-70b-versatile";
+      process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 
     this.temperature =
       config.temperature ?? 0.2;
@@ -89,41 +89,46 @@ export class BaseAgent {
 
   }
 
-  async readWorkspace(workspaceId) {
+  async readWorkspace(workspaceId, workspaceVersion = 1) {
 
     if (!workspaceId)
       return [];
 
     return await readKnowledge(
-      workspaceId
+      workspaceId,
+      workspaceVersion
     );
 
   }
 
-  async workspaceMemory(workspaceId) {
+  async workspaceMemory(workspaceId, workspaceVersion = 1) {
 
     if (!workspaceId)
       return {};
 
     return await getWorkspaceMemory(
-      workspaceId
+      workspaceId,
+      workspaceVersion
     );
 
   }
 
-  async saveWorkspace(workspaceId, patch = {}) {
+  async saveWorkspace(workspaceId, patch = {}, workspaceVersion = 1) {
 
     if (!workspaceId)
       return;
 
     await updateWorkspaceMemory(
       workspaceId,
-      patch
+      {
+        ...patch,
+        workspaceVersion
+      }
     );
 
   }
 
-  async publish(workspaceId, data) {
+  async publish(workspaceId, data, workspaceVersion = 1) {
 
     if (!workspaceId)
       return;
@@ -131,7 +136,8 @@ export class BaseAgent {
     await publishKnowledge(
       workspaceId,
       this.name,
-      data
+      data,
+      workspaceVersion
     );
 
   }

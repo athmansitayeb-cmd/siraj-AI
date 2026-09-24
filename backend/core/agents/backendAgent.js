@@ -36,6 +36,20 @@ Return ONLY the updated backend/server.js.
 - Preserve middleware.
 - Preserve imports.
 
+Frontend architecture:
+
+The frontend is a separate Vite React application located at:
+frontend-react/
+
+Its production build output is:
+frontend-react/dist/
+
+This backend is an API + Socket.IO server.
+
+DO NOT add express.static(), sendFile(), frontend/build, frontend-react/dist, SPA fallback routes, or any frontend serving logic unless the USER REQUEST or architecture explicitly requires the backend to serve the frontend.
+
+Never invent a frontend/build directory.
+
 Requirements:
 
 - Express
@@ -52,8 +66,14 @@ registerAgent("backend", {
 
   async execute({ input, context }) {
 
+    const workspaceVersion =
+      context?.workspace?.snapshot?.version || 1;
+
     const knowledge = context?.workspaceId
-      ? await readKnowledge(context.workspaceId)
+      ? await readKnowledge(
+          context.workspaceId,
+          workspaceVersion
+        )
       : [];
 
 const plannerKnowledge =
@@ -117,7 +137,10 @@ Keep formatting clean.
 
   routes: plan.routes || [],
 
-  entities: plan.entities || []
+  entities: plan.entities || [],
+
+  context
+
 }
 
     });

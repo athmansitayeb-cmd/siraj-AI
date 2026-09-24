@@ -13,12 +13,12 @@ export function estimateTokens(text = "") {
 /**
  * حساب تكلفة حسب نموذج Groq
  */
-export function estimateCost(tokens, model = "llama-3.3-70b-versatile") {
+export function estimateCost(tokens, model = process.env.GROQ_MODEL || "openai/gpt-oss-120b") {
   // أسعار تقريبية (تتغير حسب Groq)
   const pricing = {
-    "llama-3.3-70b-versatile": {
-      input: 0.00059 / 1000,
-      output: 0.00079 / 1000
+    "openai/gpt-oss-120b": {
+      input: 0.00015 / 1000,
+      output: 0.00060 / 1000
     },
     "llama-3.1-8b-instant": {
       input: 0.00005 / 1000,
@@ -26,7 +26,7 @@ export function estimateCost(tokens, model = "llama-3.3-70b-versatile") {
     }
   };
 
-  const p = pricing[model] || pricing["llama-3.3-70b-versatile"];
+  const p = pricing[model] || pricing["openai/gpt-oss-120b"];
 
   // نفترض نصف input نصف output (تقريب عملي)
   const inputTokens = tokens * 0.6;

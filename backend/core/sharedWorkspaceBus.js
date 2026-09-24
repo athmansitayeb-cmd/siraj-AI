@@ -1,9 +1,9 @@
 import { getWorkspaceMemory, updateWorkspaceMemory }
 from "./workspaceMemory.js";
 
-export async function publishKnowledge(workspaceId, agent, data) {
+export async function publishKnowledge(workspaceId, agent, data, workspaceVersion = 1) {
 
-  const memory = await getWorkspaceMemory(workspaceId);
+  const memory = await getWorkspaceMemory(workspaceId, workspaceVersion);
 
 const shared = Array.isArray(memory.sharedContext)
   ? [...memory.sharedContext]
@@ -23,15 +23,19 @@ while (shared.length > MAX_EVENTS) {
 }
 
 await updateWorkspaceMemory(workspaceId, {
+  workspaceVersion,
   sharedContext: shared
 });
 
   return true;
 }
 
-export async function readKnowledge(workspaceId) {
+export async function readKnowledge(workspaceId, workspaceVersion = 1) {
 
-  const memory = await getWorkspaceMemory(workspaceId);
+  const memory = await getWorkspaceMemory(
+    workspaceId,
+    workspaceVersion
+  );
 
   return memory.sharedContext || [];
 }

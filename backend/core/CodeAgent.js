@@ -23,13 +23,22 @@ return String(content)
   async buildPrompt(workspaceId, input, context = {}) {
 
     let latestPlan = {};
+    let workspaceKnowledge = [];
+
+    const workspaceVersion =
+      context.workspace?.snapshot?.version || 1;
 
     if (workspaceId) {
 
       try {
 
         const knowledge =
-          await readKnowledge(workspaceId);
+          await readKnowledge(
+            workspaceId,
+            workspaceVersion
+          );
+
+        workspaceKnowledge = knowledge;
 
 const plannerKnowledge =
   [...knowledge]
@@ -60,7 +69,7 @@ content: JSON.stringify({
     context.workspace?.files || [],
 
   sharedKnowledge:
-    context.workspace?.knowledge || [],
+    workspaceKnowledge,
 
   agent:
     context.agentMeta || {},
@@ -101,7 +110,8 @@ return cleaned.length ? cleaned : "";
     prompt,
     path,
     fallback = "",
-    workspaceId
+    workspaceId,
+    workspaceVersion = 1
 
   }) {
 
@@ -144,7 +154,8 @@ return cleaned.length ? cleaned : "";
           {
             generated: path,
             ts: Date.now()
-          }
+          },
+          workspaceVersion
         );
 
       } catch {}
